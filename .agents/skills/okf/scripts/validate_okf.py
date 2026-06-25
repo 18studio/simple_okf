@@ -161,7 +161,7 @@ def validate(bundle: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate an OKF bundle")
-    parser.add_argument("bundle", nargs="?", default="okf/platform-system")
+    parser.add_argument("bundle", nargs="?", default="okr")
     args = parser.parse_args()
     return validate(Path(args.bundle))
 

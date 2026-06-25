@@ -169,7 +169,7 @@ def build_graph(bundle: Path) -> Dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate OKF graph JSON from Markdown links")
-    parser.add_argument("bundle", nargs="?", default="okf/platform-system")
+    parser.add_argument("bundle", nargs="?", default="okr")
     parser.add_argument("--out", help="Output JSON file. Defaults to stdout.")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     args = parser.parse_args()

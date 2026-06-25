@@ -1,6 +1,6 @@
 # OKF Project Template Specification
 
-Версия шаблона: `0.2`
+Версия шаблона: `0.3`
 
 ## Назначение
 
@@ -23,13 +23,13 @@
 Основной bundle расположен здесь:
 
 ```text
-okf/platform-system/
+okr/
 ```
 
 Базовая структура:
 
 ```text
-okf/platform-system/
+okr/
 ├── index.md
 ├── log.md
 ├── documents/
@@ -44,13 +44,10 @@ okf/platform-system/
 │   └── operations/
 ├── architecture/
 │   └── adr/
-├── ui/
-│   ├── ux/
-│   ├── design-system/
-│   └── uikit/
-└── traceability/
-    ├── gaps/
-    └── coverage/
+└── ui/
+    ├── ux/
+    ├── design-system/
+    └── uikit/
 ```
 
 ### 2. Concept format
@@ -128,28 +125,38 @@ Use cases:
 - generate graph JSON;
 - navigate bundle as an agent-readable knowledge base.
 
+### 6. Skill-owned tools and templates
+
+Локальные инструменты и шаблоны лежат внутри skill:
+
+```text
+.agents/skills/okf/scripts/
+.agents/skills/okf/templates/
+.agents/skills/okf/references/
+```
+
 ## Tooling contract
 
 Validation:
 
 ```bash
-python3 scripts/validate_okf.py okf/platform-system
+python3 .agents/skills/okf/scripts/validate_okf.py okr
 ```
 
 Index generation:
 
 ```bash
-python3 scripts/generate_okf_indexes.py okf/platform-system
+python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
 ```
 
 Canonical docs export:
 
 ```bash
-python3 scripts/export_okf.py --source system --out okf/platform-system
+python3 .agents/skills/okf/scripts/export_okf.py --source system --out okr
 ```
 
 Graph extraction:
 
 ```bash
-python3 scripts/generate_okf_graph.py okf/platform-system --out okf/platform-system/graph.json
+python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
 ```

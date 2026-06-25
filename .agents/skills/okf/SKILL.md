@@ -1,5 +1,5 @@
 ---
-name: okf-open-knowledge-format
+name: okf
 description: >
   Create, validate, enrich, index, and navigate Open Knowledge Format (OKF)
   bundles — knowledge bases represented as Markdown files with YAML
@@ -27,26 +27,26 @@ No server, database, hosted service, or SDK is required to read the bundle. If a
 For this project's compact reference, read:
 
 ```text
-docs/OKF_REFERENCE.md
+references/spec-v01.md
 ```
 
 For the vendored OKF spec/reference material, see:
 
 ```text
-.agents/skills/okf/references/spec-v01.md
-.agents/skills/okf/references/examples.md
-.agents/skills/okf/references/conversion.md
+references/spec-v01.md
+references/examples.md
+references/conversion.md
 ```
 
 ## Project layout
 
-Main bundle:
+Main project-root bundle:
 
 ```text
-okf/platform-system/
+okr/
 ```
 
-Local tools:
+Local tools bundled with this skill:
 
 ```text
 scripts/validate_okf.py
@@ -55,14 +55,14 @@ scripts/export_okf.py
 scripts/generate_okf_graph.py
 ```
 
-Templates:
+Templates bundled with this skill:
 
 ```text
-templates/okf/concept.md
-templates/okf/source-document.md
-templates/okf/requirement.md
-templates/okf/api-operation.md
-templates/okf/data-entity.md
+templates/concept.md
+templates/source-document.md
+templates/requirement.md
+templates/api-operation.md
+templates/data-entity.md
 ```
 
 ## Core terminology
@@ -160,17 +160,17 @@ Project convention: prefer relative links for internal bundle links because loca
 
 ## Workflow: inspect existing bundle
 
-1. Read `okf/platform-system/index.md`.
+1. Read `okr/index.md`.
 2. Read the nearest relevant directory `index.md`.
 3. Open only the concepts needed for the task.
 4. Follow Markdown links when relationships matter.
-5. Use `docs/OKF_REFERENCE.md` for project conventions.
+5. Use `references/spec-v01.md` for project conventions.
 
 ## Workflow: create a concept
 
-1. Choose the correct directory under `okf/platform-system/`.
+1. Choose the correct directory under `okr/`.
 2. Choose a stable filename and concept ID.
-3. Start from a template in `templates/okf/` when applicable.
+3. Start from a template in `templates/` when applicable.
 4. Add frontmatter with at least `type`; preferably include `title`, `description`, `timestamp`, `tags`, and source fields.
 5. Write concise Markdown body sections.
 6. Add relative links to related concepts when relationship evidence exists.
@@ -180,9 +180,9 @@ Project convention: prefer relative links for internal bundle links because loca
 Commands:
 
 ```bash
-python3 scripts/validate_okf.py okf/platform-system
-python3 scripts/generate_okf_indexes.py okf/platform-system
-python3 scripts/validate_okf.py okf/platform-system
+python3 .agents/skills/okf/scripts/validate_okf.py okr
+python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
+python3 .agents/skills/okf/scripts/validate_okf.py okr
 ```
 
 ## Workflow: edit a concept
@@ -198,15 +198,15 @@ python3 scripts/validate_okf.py okf/platform-system
 If the repository has a `system/` directory or another source directory of Markdown files, convert those files into `Source Document` concepts:
 
 ```bash
-python3 scripts/export_okf.py --source system --out okf/platform-system
-python3 scripts/generate_okf_indexes.py okf/platform-system
-python3 scripts/validate_okf.py okf/platform-system
+python3 .agents/skills/okf/scripts/export_okf.py --source system --out okr
+python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
+python3 .agents/skills/okf/scripts/validate_okf.py okr
 ```
 
 Generated concepts go under:
 
 ```text
-okf/platform-system/documents/
+okr/documents/
 ```
 
 Do not treat generated OKF output as more canonical than its source unless the user explicitly changes the ownership model.
@@ -216,7 +216,7 @@ Do not treat generated OKF output as more canonical than its source unless the u
 Build graph JSON from concepts and internal Markdown links:
 
 ```bash
-python3 scripts/generate_okf_graph.py okf/platform-system --out okf/platform-system/graph.json
+python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
 ```
 
 Use the graph for visualization, navigation, and connectivity checks. The graph is derived output and can be regenerated.
@@ -226,15 +226,15 @@ Use the graph for visualization, navigation, and connectivity checks. The graph 
 Before finishing OKF work, run:
 
 ```bash
-python3 scripts/validate_okf.py okf/platform-system
+python3 .agents/skills/okf/scripts/validate_okf.py okr
 ```
 
 When adding/removing/renaming concept files, also run:
 
 ```bash
-python3 scripts/generate_okf_indexes.py okf/platform-system
-python3 scripts/generate_okf_graph.py okf/platform-system --out okf/platform-system/graph.json
-python3 scripts/validate_okf.py okf/platform-system
+python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
+python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
+python3 .agents/skills/okf/scripts/validate_okf.py okr
 ```
 
 Report commands run and results.

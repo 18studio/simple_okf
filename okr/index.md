@@ -1,4 +1,4 @@
-# Platform System OKF Bundle
+# OKF Bundle
 
 Основной OKF bundle проекта.
 

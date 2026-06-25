@@ -110,7 +110,7 @@ def generate(bundle: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate OKF index.md files")
-    parser.add_argument("bundle", nargs="?", default="okf/platform-system")
+    parser.add_argument("bundle", nargs="?", default="okr")
     args = parser.parse_args()
     return generate(Path(args.bundle))
 
