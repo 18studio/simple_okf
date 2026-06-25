@@ -11,7 +11,8 @@
 - OKF bundle structure;
 - Markdown concepts с YAML frontmatter;
 - Markdown links как graph;
-- локальные scripts для работы с bundle;
+- FastMCP server для агентного доступа к bundle;
+- CLI scripts внутри MCP-пакета как fallback;
 - project skill для агентов.
 
 Шаблон фиксирует локальный файловый контракт OKF и не требует внешних сервисов для чтения или проверки bundle.
@@ -125,38 +126,85 @@ Use cases:
 - generate graph JSON;
 - navigate bundle as an agent-readable knowledge base.
 
-### 6. Skill-owned tools and templates
+### 6. Skill templates and references
 
-Локальные инструменты и шаблоны лежат внутри skill:
+Skill хранит только инструкции, шаблоны и reference-материалы:
 
 ```text
-.agents/skills/okf/scripts/
+.agents/skills/okf/SKILL.md
 .agents/skills/okf/templates/
 .agents/skills/okf/references/
 ```
 
+Функции бывших skill scripts перенесены в MCP server/tools. CLI fallback scripts лежат здесь:
+
+```text
+src/okf_mcp/scripts/
+```
+
+### 7. FastMCP server
+
+MCP server расположен здесь:
+
+```text
+src/okf_mcp/
+```
+
+Server предоставляет tools для чтения, поиска, записи и проверки OKF bundle:
+
+```text
+bundle_info
+list_concepts
+search_concepts
+list_directory
+read_concept
+read_existing_doc
+read_concept_raw
+sample_rows
+read_support_file
+write_concept_doc
+validate_bundle
+generate_indexes
+export_source_documents
+build_graph
+```
+
+Server также предоставляет resources:
+
+```text
+okf://bundle/info
+okf://bundle/index
+okf://bundle/graph
+```
+
 ## Tooling contract
 
-Validation:
+Primary agent-facing contract is MCP:
 
-```bash
-python3 .agents/skills/okf/scripts/validate_okf.py okr
+```text
+validate_okf.py           -> validate_bundle
+generate_okf_indexes.py   -> generate_indexes
+export_okf.py             -> export_source_documents
+generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
 ```
 
-Index generation:
+CLI fallback:
 
 ```bash
-python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/validate_okf.py okr
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/export_okf.py --source system --out okr
+python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
 ```
 
-Canonical docs export:
+MCP stdio server:
 
 ```bash
-python3 .agents/skills/okf/scripts/export_okf.py --source system --out okr
+okf-mcp --bundle okr
 ```
 
-Graph extraction:
+MCP HTTP server:
 
 ```bash
-python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
+okf-mcp --bundle okr --transport http --host 127.0.0.1 --port 8000
 ```

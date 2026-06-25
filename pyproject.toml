@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simple-okf-mcp"
+version = "0.1.0"
+description = "FastMCP server for local Open Knowledge Format bundles"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastmcp>=2.0.0",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+okf-mcp = "okf_mcp.__main__:main"
+okf-validate = "okf_mcp.scripts.validate_okf:main"
+okf-generate-indexes = "okf_mcp.scripts.generate_okf_indexes:main"
+okf-export = "okf_mcp.scripts.export_okf:main"
+okf-generate-graph = "okf_mcp.scripts.generate_okf_graph:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/okf_mcp"]

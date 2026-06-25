@@ -46,13 +46,25 @@ Main project-root bundle:
 okr/
 ```
 
-Local tools bundled with this skill:
+OKF MCP server and fallback CLI scripts:
 
 ```text
-scripts/validate_okf.py
-scripts/generate_okf_indexes.py
-scripts/export_okf.py
-scripts/generate_okf_graph.py
+src/okf_mcp/server.py
+src/okf_mcp/scripts/validate_okf.py
+src/okf_mcp/scripts/generate_okf_indexes.py
+src/okf_mcp/scripts/export_okf.py
+src/okf_mcp/scripts/generate_okf_graph.py
+```
+
+Use MCP tools first. The CLI scripts are fallback/manual tools only.
+
+MCP tool mapping for former scripts:
+
+```text
+validate_okf.py           -> validate_bundle
+generate_okf_indexes.py   -> generate_indexes
+export_okf.py             -> export_source_documents
+generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
 ```
 
 Templates bundled with this skill:
@@ -156,13 +168,31 @@ and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 
 The relationship type is expressed by surrounding prose, not by special link syntax.
 
-Project convention: prefer relative links for internal bundle links because local scripts validate and graph them reliably.
+Project convention: prefer relative links for internal bundle links because MCP validation and graph generation resolve them reliably.
+
+## Workflow: use OKF MCP
+
+For agent work, call the OKF MCP tools instead of running scripts whenever an MCP connection is available.
+
+Preferred MCP tools:
+
+- `read_support_file(path="index.md")` for navigation files.
+- `list_directory(directory="")` for directory browsing.
+- `list_concepts(...)` and `search_concepts(query, limit)` for discovery.
+- `read_concept(concept_id)` / `read_existing_doc(concept_id)` / `read_concept_raw(concept_id)` for reading.
+- `write_concept_doc(concept_id, frontmatter, body, ...)` for writing.
+- `validate_bundle()` instead of `validate_okf.py`.
+- `generate_indexes()` instead of `generate_okf_indexes.py`.
+- `export_source_documents(source="system", force=false)` instead of `export_okf.py`.
+- `build_graph(write=true, out_path="graph.json")` instead of `generate_okf_graph.py`.
+
+If MCP is unavailable, use the fallback CLI scripts under `src/okf_mcp/scripts/`.
 
 ## Workflow: inspect existing bundle
 
-1. Read `okr/index.md`.
-2. Read the nearest relevant directory `index.md`.
-3. Open only the concepts needed for the task.
+1. Call MCP `read_support_file(path="index.md")` or read `okr/index.md`.
+2. Call MCP `list_directory(...)` or read the nearest relevant directory `index.md`.
+3. Open only the concepts needed for the task via MCP `read_concept(...)`/`read_concept_raw(...)` or files.
 4. Follow Markdown links when relationships matter.
 5. Use `references/spec-v01.md` for project conventions.
 
@@ -177,12 +207,20 @@ Project convention: prefer relative links for internal bundle links because loca
 7. Add citations only when there is a real source.
 8. Run validation and regenerate indexes.
 
-Commands:
+MCP calls after creating concepts:
+
+```text
+validate_bundle()
+generate_indexes()
+validate_bundle()
+```
+
+Fallback CLI commands:
 
 ```bash
-python3 .agents/skills/okf/scripts/validate_okf.py okr
-python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
-python3 .agents/skills/okf/scripts/validate_okf.py okr
+python3 src/okf_mcp/scripts/validate_okf.py okr
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/validate_okf.py okr
 ```
 
 ## Workflow: edit a concept
@@ -195,12 +233,20 @@ python3 .agents/skills/okf/scripts/validate_okf.py okr
 
 ## Workflow: export canonical Markdown docs
 
-If the repository has a `system/` directory or another source directory of Markdown files, convert those files into `Source Document` concepts:
+If the repository has a `system/` directory or another source directory of Markdown files, convert those files into `Source Document` concepts via MCP:
+
+```text
+export_source_documents(source="system", force=false)
+generate_indexes()
+validate_bundle()
+```
+
+Fallback CLI commands:
 
 ```bash
-python3 .agents/skills/okf/scripts/export_okf.py --source system --out okr
-python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
-python3 .agents/skills/okf/scripts/validate_okf.py okr
+python3 src/okf_mcp/scripts/export_okf.py --source system --out okr
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/validate_okf.py okr
 ```
 
 Generated concepts go under:
@@ -213,31 +259,45 @@ Do not treat generated OKF output as more canonical than its source unless the u
 
 ## Workflow: generate graph
 
-Build graph JSON from concepts and internal Markdown links:
+Build graph JSON from concepts and internal Markdown links via MCP:
+
+```text
+build_graph(write=true, out_path="graph.json")
+```
+
+Fallback CLI command:
 
 ```bash
-python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
+python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
 ```
 
 Use the graph for visualization, navigation, and connectivity checks. The graph is derived output and can be regenerated.
 
 ## Validation expectations
 
-Before finishing OKF work, run:
+Before finishing OKF work, run MCP validation:
 
-```bash
-python3 .agents/skills/okf/scripts/validate_okf.py okr
+```text
+validate_bundle()
 ```
 
-When adding/removing/renaming concept files, also run:
+When adding/removing/renaming concept files, also run MCP index and graph generation:
 
-```bash
-python3 .agents/skills/okf/scripts/generate_okf_indexes.py okr
-python3 .agents/skills/okf/scripts/generate_okf_graph.py okr --out okr/graph.json
-python3 .agents/skills/okf/scripts/validate_okf.py okr
+```text
+generate_indexes()
+build_graph(write=true, out_path="graph.json")
+validate_bundle()
 ```
 
-Report commands run and results.
+Fallback CLI commands:
+
+```bash
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
+python3 src/okf_mcp/scripts/validate_okf.py okr
+```
+
+Report MCP tool calls or fallback commands run and results.
 
 ## Guardrails
 
