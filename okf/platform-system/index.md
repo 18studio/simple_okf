@@ -10,7 +10,6 @@
 * [API](api/index.md) — API operations/contracts.
 * [Architecture](architecture/index.md) — ADR и архитектурные concepts.
 * [UI](ui/index.md) — UX, design system, UI kit.
-* [Traceability](traceability/index.md) — coverage, gaps, traceability concepts.
 
 ## Conventions
 
