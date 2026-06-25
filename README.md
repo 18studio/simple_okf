@@ -8,13 +8,14 @@ OKF здесь используется как переносимый knowledge 
 Markdown + YAML frontmatter + directories + Markdown links
 ```
 
-Проект содержит:
+Проект содержит только OKF-формат и локальные инструменты для работы с ним:
 
 1. структуру директории под OKF bundle;
-2. конфигурацию `kcmd` MCP для работы с metadata snapshots;
-3. project skill для агентов: `.pi/skills/okf/SKILL.md`.
+2. шаблоны OKF concept-файлов;
+3. скрипты для валидации, генерации индексов, экспорта Markdown-документов и построения graph JSON;
+4. project skill для агентов: `.agents/skills/okf/SKILL.md`.
 
-> Контекст по OKF взят из репозитория `GoogleCloudPlatform/knowledge-catalog`, директории `okf/` и `toolbox/mdcode/`. Репозиторий помечен как **not an official Google product**.
+Шаблон сфокусирован на локальных файлах, Git-friendly workflow и агентной навигации по Markdown-ссылкам.
 
 ## Структура
 
@@ -22,15 +23,11 @@ Markdown + YAML frontmatter + directories + Markdown links
 .
 ├── okf/
 │   └── platform-system/          # основной OKF bundle
-├── snapshots/
-│   └── kcmd/                     # локальные kcmd snapshots
-├── config/
-│   └── mcp/                      # MCP конфигурации
-├── scripts/                      # утилиты OKF
+├── scripts/                      # локальные OKF-утилиты
 ├── templates/
 │   └── okf/                      # шаблоны concept-файлов
-├── docs/                         # краткая справка по OKF/kcmd
-└── .pi/skills/okf/               # skill для обращения с OKF
+├── docs/                         # краткая справка по OKF
+└── .agents/skills/okf/           # skill для обращения с OKF
 ```
 
 ## Быстрый старт
@@ -53,27 +50,10 @@ python3 scripts/generate_okf_indexes.py okf/platform-system
 python3 scripts/export_okf.py --source system --out okf/platform-system
 ```
 
-## kcmd MCP
-
-Шаблон MCP-конфига лежит в:
-
-```text
-.mcp.json
-config/mcp/kcmd.mcp.json
-```
-
-Он ожидает, что команда `kcmd` доступна в `PATH`, а snapshot находится в:
-
-```text
-snapshots/kcmd/catalog-snapshot/
-├── catalog.yaml
-└── catalog/
-```
-
-Пример запуска MCP server вручную:
+Построить JSON-граф concepts и Markdown-ссылок:
 
 ```bash
-kcmd mcp --path snapshots/kcmd/catalog-snapshot
+python3 scripts/generate_okf_graph.py okf/platform-system --out okf/platform-system/graph.json
 ```
 
 ## OKF правила проекта
@@ -85,39 +65,38 @@ kcmd mcp --path snapshots/kcmd/catalog-snapshot
 - Минимально обязательное поле OKF: `type`.
 - В этом шаблоне дополнительно рекомендуется: `title`, `description`, `timestamp`.
 - Связи выражаются Markdown-ссылками между concept-файлами.
-- Для visualizer и валидатора предпочтительны относительные ссылки.
+- Для graph tooling и валидатора предпочтительны относительные ссылки.
 
-## Установка OKF reference agent из upstream
+## Шаблоны concepts
 
-Если нужен upstream reference agent:
-
-```bash
-mkdir -p external
-cd external
-git clone https://github.com/GoogleCloudPlatform/knowledge-catalog.git
-cd knowledge-catalog/okf
-
-python3.13 -m venv .venv
-.venv/bin/pip install --index-url https://pypi.org/simple/ -e '.[dev]'
+```text
+templates/okf/concept.md
+templates/okf/source-document.md
+templates/okf/requirement.md
+templates/okf/api-operation.md
+templates/okf/data-entity.md
 ```
 
-BigQuery auth:
+## Локальные инструменты
 
-```bash
-gcloud auth application-default login
-gcloud config set project <project-id>
+```text
+scripts/validate_okf.py           # проверяет frontmatter, type, ссылки, дубликаты requirement_id
+scripts/generate_okf_indexes.py   # пересобирает index.md в директориях bundle
+scripts/export_okf.py             # экспортирует system/*.md как Source Document concepts
+scripts/generate_okf_graph.py     # строит graph.json из concepts и Markdown-ссылок
 ```
 
-Gemini через API key:
+## Минимальный concept
 
-```bash
-export GEMINI_API_KEY=...
-```
+```md
+---
+type: Reference
+title: Example
+description: Short description.
+timestamp: 2026-06-25T00:00:00Z
+---
 
-Или через Vertex AI:
+# Example
 
-```bash
-export GOOGLE_GENAI_USE_VERTEXAI=true
-export GOOGLE_CLOUD_PROJECT=<project-id>
-export GOOGLE_CLOUD_LOCATION=<region>
+Body text with a link to [another concept](./another.md).
 ```

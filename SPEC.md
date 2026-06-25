@@ -1,10 +1,20 @@
 # OKF Project Template Specification
 
-Версия шаблона: `0.1`
+Версия шаблона: `0.2`
 
 ## Назначение
 
-Этот репозиторий задаёт минимальный шаблон проекта для ведения знаний в OKF формате и подключения metadata tooling через `kcmd` MCP.
+Этот репозиторий задаёт минимальный шаблон проекта для ведения знаний в формате OKF.
+
+Шаблон намеренно ограничен:
+
+- OKF bundle structure;
+- Markdown concepts с YAML frontmatter;
+- Markdown links как graph;
+- локальные scripts для работы с bundle;
+- project skill для агентов.
+
+Шаблон фиксирует локальный файловый контракт OKF и не требует внешних сервисов для чтения или проверки bundle.
 
 ## Обязательные части шаблона
 
@@ -47,7 +57,7 @@ okf/platform-system/
 
 Каждый concept — Markdown-файл с YAML frontmatter.
 
-Минимум:
+Минимум по OKF:
 
 ```md
 ---
@@ -57,7 +67,7 @@ type: Reference
 Concept body.
 ```
 
-Рекомендуемый формат:
+Рекомендуемый формат в этом шаблоне:
 
 ```md
 ---
@@ -77,6 +87,13 @@ owner_document: API.md
 ...
 ```
 
+Правила:
+
+- `type` обязателен;
+- `title`, `description`, `timestamp` рекомендуются;
+- неизвестные frontmatter-поля разрешены;
+- producer-specific поля должны сохраняться при редактировании.
+
 ### 3. Navigation files
 
 `index.md` — навигационный файл директории. Не считается concept.
@@ -92,44 +109,14 @@ Creates [Project](../../data/entities/project.md)
 and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 ```
 
-Для внутренних связей предпочтительны относительные ссылки.
+Тип отношения задаётся окружающим текстом. Для внутренних связей предпочтительны относительные ссылки.
 
-### 5. kcmd MCP
-
-MCP config:
-
-```text
-.mcp.json
-config/mcp/kcmd.mcp.json
-```
-
-Configured server:
-
-```json
-{
-  "mcpServers": {
-    "kcmd": {
-      "command": "kcmd",
-      "args": ["mcp", "--path", "snapshots/kcmd/catalog-snapshot"]
-    }
-  }
-}
-```
-
-Expected snapshot:
-
-```text
-snapshots/kcmd/catalog-snapshot/
-├── catalog.yaml
-└── catalog/
-```
-
-### 6. OKF Skill
+### 5. OKF Skill
 
 Project skill:
 
 ```text
-.pi/skills/okf/SKILL.md
+.agents/skills/okf/SKILL.md
 ```
 
 Use cases:
@@ -138,7 +125,8 @@ Use cases:
 - validate OKF bundle;
 - regenerate indexes;
 - export canonical docs;
-- use `kcmd` snapshots when metadata catalog integration is needed.
+- generate graph JSON;
+- navigate bundle as an agent-readable knowledge base.
 
 ## Tooling contract
 
@@ -158,4 +146,10 @@ Canonical docs export:
 
 ```bash
 python3 scripts/export_okf.py --source system --out okf/platform-system
+```
+
+Graph extraction:
+
+```bash
+python3 scripts/generate_okf_graph.py okf/platform-system --out okf/platform-system/graph.json
 ```

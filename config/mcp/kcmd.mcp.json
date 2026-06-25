@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "kcmd": {
-      "command": "kcmd",
-      "args": ["mcp", "--path", "snapshots/kcmd/catalog-snapshot"]
-    }
-  }
-}
