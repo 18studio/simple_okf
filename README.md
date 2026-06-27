@@ -22,7 +22,7 @@ Markdown + YAML frontmatter + directories + Markdown links
 
 ```text
 .
-├── okr/                         # основной OKF bundle
+├── okf/                         # основной OKF bundle
 ├── src/okf_mcp/                 # FastMCP server, OKF helpers, CLI scripts
 │   └── scripts/
 ├── pyproject.toml
@@ -39,25 +39,25 @@ Markdown + YAML frontmatter + directories + Markdown links
 Проверить OKF bundle:
 
 ```bash
-python3 src/okf_mcp/scripts/validate_okf.py okr
+python3 src/okf_mcp/scripts/validate_okf.py okf
 ```
 
 Сгенерировать `index.md` по директориям:
 
 ```bash
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okf
 ```
 
 Экспортировать документы из `system/`, если такая директория есть:
 
 ```bash
-python3 src/okf_mcp/scripts/export_okf.py --source system --out okr
+python3 src/okf_mcp/scripts/export_okf.py --source system --out okf
 ```
 
 Построить JSON-граф concepts и Markdown-ссылок:
 
 ```bash
-python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
+python3 src/okf_mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
 ```
 
 ## FastMCP server
@@ -73,22 +73,22 @@ pip install -e .
 Запустить MCP по stdio:
 
 ```bash
-okf-mcp --bundle okr
+okf-mcp --bundle okf
 # или
-python3 -m okf_mcp --bundle okr
+python3 -m okf_mcp --bundle okf
 ```
 
 Запустить HTTP transport:
 
 ```bash
-okf-mcp --bundle okr --transport http --host 127.0.0.1 --port 8000
+okf-mcp --bundle okf --transport http --host 127.0.0.1 --port 8000
 ```
 
 Также можно запускать через FastMCP CLI:
 
 ```bash
-OKF_BUNDLE=okr fastmcp run src/okf_mcp/server.py:mcp
-OKF_BUNDLE=okr fastmcp run src/okf_mcp/server.py:mcp --transport http --port 8000
+OKF_BUNDLE=okf fastmcp run src/okf_mcp/server.py:mcp
+OKF_BUNDLE=okf fastmcp run src/okf_mcp/server.py:mcp --transport http --port 8000
 ```
 
 MCP предоставляет tools:
@@ -106,7 +106,7 @@ MCP предоставляет tools:
 - `validate_bundle`
 - `generate_indexes`
 - `export_source_documents`
-- `build_graph`
+- `build_graph` — строит JSON-граф и опционально HTML-отчет (`html=true`)
 
 И resources:
 
@@ -116,7 +116,7 @@ MCP предоставляет tools:
 
 ## OKF правила проекта
 
-- `okr/` — основной bundle.
+- `okf/` — основной bundle.
 - Каждый concept — Markdown-файл с YAML frontmatter.
 - `index.md` — навигационный файл, не concept.
 - `log.md` — опциональный журнал изменений, не concept.
@@ -145,7 +145,7 @@ MCP предоставляет tools:
 validate_okf.py           -> validate_bundle
 generate_okf_indexes.py   -> generate_indexes
 export_okf.py             -> export_source_documents
-generate_okf_graph.py     -> build_graph(write=true)
+generate_okf_graph.py     -> build_graph(write=true, html=true, html_out_path="graph.html")
 ```
 
 ## CLI scripts
@@ -154,7 +154,7 @@ generate_okf_graph.py     -> build_graph(write=true)
 src/okf_mcp/scripts/validate_okf.py           # проверяет frontmatter, type, ссылки, дубликаты requirement_id
 src/okf_mcp/scripts/generate_okf_indexes.py   # пересобирает index.md в директориях bundle
 src/okf_mcp/scripts/export_okf.py             # экспортирует system/*.md как Source Document concepts
-src/okf_mcp/scripts/generate_okf_graph.py     # строит graph.json из concepts и Markdown-ссылок
+src/okf_mcp/scripts/generate_okf_graph.py     # строит graph.json и HTML-отчет из concepts и Markdown-ссылок
 ```
 
 ## Минимальный concept

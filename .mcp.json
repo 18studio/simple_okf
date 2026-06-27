@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "simple-okf": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/n.baryshnikov/Projects/18studio/simple_okf",
+        "run",
+        "python",
+        "mcp/__main__.py",
+        "--bundle",
+        "okf"
+      ],
+      "env": {
+        "UV_CACHE_DIR": "/tmp/simple-okf-uv-cache"
+      },
+      "directTools": true
+    }
+  }
+}

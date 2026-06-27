@@ -24,13 +24,13 @@
 Основной bundle расположен здесь:
 
 ```text
-okr/
+okf/
 ```
 
 Базовая структура:
 
 ```text
-okr/
+okf/
 ├── index.md
 ├── log.md
 ├── documents/
@@ -191,20 +191,20 @@ generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
 CLI fallback:
 
 ```bash
-python3 src/okf_mcp/scripts/validate_okf.py okr
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
-python3 src/okf_mcp/scripts/export_okf.py --source system --out okr
-python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
+python3 src/okf_mcp/scripts/validate_okf.py okf
+python3 src/okf_mcp/scripts/generate_okf_indexes.py okf
+python3 src/okf_mcp/scripts/export_okf.py --source system --out okf
+python3 src/okf_mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
 ```
 
 MCP stdio server:
 
 ```bash
-okf-mcp --bundle okr
+okf-mcp --bundle okf
 ```
 
 MCP HTTP server:
 
 ```bash
-okf-mcp --bundle okr --transport http --host 127.0.0.1 --port 8000
+okf-mcp --bundle okf --transport http --host 127.0.0.1 --port 8000
 ```

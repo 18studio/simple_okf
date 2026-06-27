@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 
-from okf_mcp.server import create_mcp
+try:
+    from .server import create_mcp
+except ImportError:  # Allows running as `python mcp/__main__.py`.
+    from server import create_mcp
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run an OKF FastMCP server")
-    parser.add_argument("--bundle", default="okr", help="Path to the OKF bundle directory")
+    parser.add_argument("--bundle", default="okf", help="Path to the OKF bundle directory")
     parser.add_argument(
         "--transport",
         default="stdio",

@@ -1,12 +1,11 @@
 ---
 name: okf
 description: >
-  Create, validate, enrich, index, and navigate Open Knowledge Format (OKF)
-  bundles — knowledge bases represented as Markdown files with YAML
-  frontmatter. Use when the user mentions OKF, Open Knowledge Format,
-  knowledge bundle, OKF bundle, agent-readable knowledge, LLM wiki, validate
-  OKF, convert Markdown documents to OKF, generate OKF indexes, generate an
-  OKF graph, or structure knowledge as local files for AI agent consumption.
+  Work with Open Knowledge Format (OKF) bundles. Use when the user mentions
+  OKF, Open Knowledge Format, knowledge bundle, OKF bundle, agent-readable
+  knowledge, LLM wiki, validation, indexing, graph generation, search,
+  reading, or writing OKF concepts. All OKF information and operations must
+  go through the MCP server named simple-okf from .mcp.json.
 metadata:
   version: "2.0"
   scope: local-okf-only
@@ -22,59 +21,31 @@ OKF is a vendor-neutral file format for representing knowledge as:
 Markdown + YAML frontmatter + directories + Markdown links
 ```
 
-No server, database, hosted service, or SDK is required to read the bundle. If a tool can read files, it can consume OKF.
+Project OKF content must be read and changed through the MCP server named `simple-okf`. Use local reference files only for format rules, not as the source of project knowledge.
 
-For this project's compact reference, read:
+## MCP entrypoint
+
+Use the MCP server named:
 
 ```text
-references/spec-v01.md
+simple-okf
 ```
 
-For the vendored OKF spec/reference material, see:
+`simple-okf` is configured in `.mcp.json`. Call OKF tools by this MCP name. Do not use local OKF files or script paths as the source of project information.
+
+Core operations:
 
 ```text
-references/spec-v01.md
-references/examples.md
-references/conversion.md
-```
-
-## Project layout
-
-Main project-root bundle:
-
-```text
-okr/
-```
-
-OKF MCP server and fallback CLI scripts:
-
-```text
-src/okf_mcp/server.py
-src/okf_mcp/scripts/validate_okf.py
-src/okf_mcp/scripts/generate_okf_indexes.py
-src/okf_mcp/scripts/export_okf.py
-src/okf_mcp/scripts/generate_okf_graph.py
-```
-
-Use MCP tools first. The CLI scripts are fallback/manual tools only.
-
-MCP tool mapping for former scripts:
-
-```text
-validate_okf.py           -> validate_bundle
-generate_okf_indexes.py   -> generate_indexes
-export_okf.py             -> export_source_documents
-generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
-```
-
-Templates bundled with this skill:
-
-```text
-templates/concept.md
-templates/source-document.md
-templates/requirement.md
-templates/api-operation.md
-templates/data-entity.md
+simple-okf.read_support_file(...)
+simple-okf.list_directory(...)
+simple-okf.list_concepts(...)
+simple-okf.search_concepts(...)
+simple-okf.read_concept(...)
+simple-okf.write_concept_doc(...)
+simple-okf.validate_bundle()
+simple-okf.generate_indexes()
+simple-okf.export_source_documents(...)
+simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
 ```
 
 ## Core terminology
@@ -172,132 +143,87 @@ Project convention: prefer relative links for internal bundle links because MCP 
 
 ## Workflow: use OKF MCP
 
-For agent work, call the OKF MCP tools instead of running scripts whenever an MCP connection is available.
+For agent work, call the MCP server named `simple-okf`.
 
-Preferred MCP tools:
+Preferred `simple-okf` MCP tools:
 
-- `read_support_file(path="index.md")` for navigation files.
-- `list_directory(directory="")` for directory browsing.
-- `list_concepts(...)` and `search_concepts(query, limit)` for discovery.
-- `read_concept(concept_id)` / `read_existing_doc(concept_id)` / `read_concept_raw(concept_id)` for reading.
-- `write_concept_doc(concept_id, frontmatter, body, ...)` for writing.
-- `validate_bundle()` instead of `validate_okf.py`.
-- `generate_indexes()` instead of `generate_okf_indexes.py`.
-- `export_source_documents(source="system", force=false)` instead of `export_okf.py`.
-- `build_graph(write=true, out_path="graph.json")` instead of `generate_okf_graph.py`.
+- `simple-okf.read_support_file(path="index.md")` for navigation.
+- `simple-okf.list_directory(directory="")` for directory browsing.
+- `simple-okf.list_concepts(...)` and `simple-okf.search_concepts(query, limit)` for discovery.
+- `simple-okf.read_concept(concept_id)` / `simple-okf.read_existing_doc(concept_id)` / `simple-okf.read_concept_raw(concept_id)` for reading.
+- `simple-okf.write_concept_doc(concept_id, frontmatter, body, ...)` for writing.
+- `simple-okf.validate_bundle()` for validation.
+- `simple-okf.generate_indexes()` for indexes.
+- `simple-okf.export_source_documents(source="system", force=false)` for source-document import.
+- `simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")` for graph JSON and HTML report generation.
 
-If MCP is unavailable, use the fallback CLI scripts under `src/okf_mcp/scripts/`.
+If `simple-okf` is unavailable, report that MCP is unavailable instead of silently switching to local files.
 
 ## Workflow: inspect existing bundle
 
-1. Call MCP `read_support_file(path="index.md")` or read `okr/index.md`.
-2. Call MCP `list_directory(...)` or read the nearest relevant directory `index.md`.
-3. Open only the concepts needed for the task via MCP `read_concept(...)`/`read_concept_raw(...)` or files.
-4. Follow Markdown links when relationships matter.
-5. Use `references/spec-v01.md` for project conventions.
+1. Call `simple-okf.read_support_file(path="index.md")`.
+2. Call `simple-okf.list_directory(...)`.
+3. Open only the concepts needed for the task via `simple-okf.read_concept(...)` or `simple-okf.read_concept_raw(...)`.
+4. Follow Markdown links when relationships matter by reading linked concepts through `simple-okf`.
 
 ## Workflow: create a concept
 
-1. Choose the correct directory under `okr/`.
-2. Choose a stable filename and concept ID.
-3. Start from a template in `templates/` when applicable.
-4. Add frontmatter with at least `type`; preferably include `title`, `description`, `timestamp`, `tags`, and source fields.
-5. Write concise Markdown body sections.
-6. Add relative links to related concepts when relationship evidence exists.
-7. Add citations only when there is a real source.
-8. Run validation and regenerate indexes.
-
-MCP calls after creating concepts:
-
-```text
-validate_bundle()
-generate_indexes()
-validate_bundle()
-```
-
-Fallback CLI commands:
-
-```bash
-python3 src/okf_mcp/scripts/validate_okf.py okr
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
-python3 src/okf_mcp/scripts/validate_okf.py okr
-```
+1. Discover the correct location with `simple-okf.list_directory(...)` and `simple-okf.list_concepts(...)`.
+2. Choose a stable concept ID.
+3. Add frontmatter with at least `type`; preferably include `title`, `description`, `timestamp`, `tags`, and source fields.
+4. Write concise Markdown body sections.
+5. Add relative links to related concepts when relationship evidence exists.
+6. Add citations only when there is a real source.
+7. Write via `simple-okf.write_concept_doc(...)`.
+8. Run `simple-okf.generate_indexes()` and `simple-okf.validate_bundle()`.
 
 ## Workflow: edit a concept
 
 1. Preserve existing unknown frontmatter keys.
 2. Preserve stable IDs unless the user explicitly approves a rename.
-3. Update links if files move.
+3. Update links if concept IDs move.
 4. Do not delete citations or schema details unless they are incorrect or obsolete.
-5. Re-run validation.
+5. Write via `simple-okf.write_concept_doc(...)` and run `simple-okf.validate_bundle()`.
 
 ## Workflow: export canonical Markdown docs
 
-If the repository has a `system/` directory or another source directory of Markdown files, convert those files into `Source Document` concepts via MCP:
+Convert source Markdown documents into `Source Document` concepts via `simple-okf`:
 
 ```text
-export_source_documents(source="system", force=false)
-generate_indexes()
-validate_bundle()
-```
-
-Fallback CLI commands:
-
-```bash
-python3 src/okf_mcp/scripts/export_okf.py --source system --out okr
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
-python3 src/okf_mcp/scripts/validate_okf.py okr
-```
-
-Generated concepts go under:
-
-```text
-okr/documents/
+simple-okf.export_source_documents(source="system", force=false)
+simple-okf.generate_indexes()
+simple-okf.validate_bundle()
 ```
 
 Do not treat generated OKF output as more canonical than its source unless the user explicitly changes the ownership model.
 
 ## Workflow: generate graph
 
-Build graph JSON from concepts and internal Markdown links via MCP:
+Build graph JSON and HTML report from concepts and internal Markdown links via `simple-okf`:
 
 ```text
-build_graph(write=true, out_path="graph.json")
+simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
 ```
 
-Fallback CLI command:
-
-```bash
-python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
-```
-
-Use the graph for visualization, navigation, and connectivity checks. The graph is derived output and can be regenerated.
+Use the graph report for visualization, navigation, and connectivity checks. The graph is derived output and can be regenerated.
 
 ## Validation expectations
 
-Before finishing OKF work, run MCP validation:
+Before finishing OKF work, run validation through `simple-okf`:
 
 ```text
-validate_bundle()
+simple-okf.validate_bundle()
 ```
 
-When adding/removing/renaming concept files, also run MCP index and graph generation:
+When adding/removing/renaming concepts, also run:
 
 ```text
-generate_indexes()
-build_graph(write=true, out_path="graph.json")
-validate_bundle()
+simple-okf.generate_indexes()
+simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
+simple-okf.validate_bundle()
 ```
 
-Fallback CLI commands:
-
-```bash
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okr
-python3 src/okf_mcp/scripts/generate_okf_graph.py okr --out okr/graph.json
-python3 src/okf_mcp/scripts/validate_okf.py okr
-```
-
-Report MCP tool calls or fallback commands run and results.
+Report `simple-okf` MCP tool calls and results.
 
 ## Guardrails
 

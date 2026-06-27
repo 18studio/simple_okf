@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 from dataclasses import dataclass, field
@@ -136,6 +137,323 @@ def _iter_source_docs(source: Path) -> Iterable[Path]:
         if any(part.startswith(".") for part in path.relative_to(source).parts):
             continue
         yield path
+
+
+def _render_graph_html(graph: dict[str, Any]) -> str:
+    """Render a self-contained HTML report for an OKF graph."""
+
+    nodes = graph.get("nodes") or []
+    edges = graph.get("edges") or []
+    type_counts: dict[str, int] = {}
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        node_type = str(node.get("type") or "Concept")
+        type_counts[node_type] = type_counts.get(node_type, 0) + 1
+
+    top_types = sorted(type_counts.items(), key=lambda item: (-item[1], item[0]))[:12]
+    type_badges = "\n".join(
+        f'<span class="badge"><b>{html.escape(name)}</b> {count}</span>'
+        for name, count in top_types
+    )
+    if not type_badges:
+        type_badges = '<span class="muted">No node types found.</span>'
+
+    graph_json = json.dumps(graph, ensure_ascii=False).replace("</", "<\\/")
+    graph_json_literal = json.dumps(graph_json, ensure_ascii=False)
+
+    bundle = html.escape(str(graph.get("bundle") or ""))
+    node_count = html.escape(str(graph.get("node_count", len(nodes))))
+    edge_count = html.escape(str(graph.get("edge_count", len(edges))))
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OKF Graph Report</title>
+  <style>
+    :root {{
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #374151;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --danger: #fb7185;
+      --ok: #34d399;
+    }}
+    @media (prefers-color-scheme: light) {{
+      :root {{ --bg: #f8fafc; --panel: #ffffff; --panel-2: #f1f5f9; --text: #0f172a; --muted: #64748b; --line: #cbd5e1; }}
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }}
+    header {{ padding: 24px; border-bottom: 1px solid var(--line); background: var(--panel); }}
+    h1 {{ margin: 0 0 8px; font-size: 28px; }}
+    .muted {{ color: var(--muted); }}
+    .layout {{ display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; }}
+    .panel {{ background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }}
+    .panel h2 {{ margin: 0; padding: 14px 16px; font-size: 16px; border-bottom: 1px solid var(--line); background: var(--panel-2); }}
+    .stats {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }}
+    .stat, .badge {{ display: inline-flex; gap: 8px; align-items: baseline; padding: 8px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }}
+    .stat b {{ font-size: 18px; }}
+    .toolbar {{ display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }}
+    input, select {{ color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; min-width: 160px; }}
+    input {{ flex: 1; }}
+    svg {{ display: block; width: 100%; height: 620px; background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 45%); }}
+    .edge {{ stroke: var(--line); stroke-opacity: .72; }}
+    .edge.active {{ stroke: var(--accent); stroke-opacity: 1; stroke-width: 2.5; }}
+    .node circle {{ stroke: rgba(255,255,255,.55); stroke-width: 1.5; cursor: pointer; }}
+    .node text {{ pointer-events: none; fill: currentColor; font-size: 11px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }}
+    .node.dim, .edge.dim {{ opacity: .12; }}
+    .node.selected circle {{ stroke: var(--danger); stroke-width: 3; }}
+    .side {{ padding: 14px; }}
+    .side dl {{ margin: 0; display: grid; gap: 10px; }}
+    .side dt {{ color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }}
+    .side dd {{ margin: 0; overflow-wrap: anywhere; }}
+    .table-wrap {{ max-height: 360px; overflow: auto; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
+    th {{ position: sticky; top: 0; background: var(--panel-2); }}
+    tr {{ cursor: pointer; }}
+    tr:hover {{ background: var(--panel-2); }}
+    .chips {{ display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }}
+    @media (max-width: 980px) {{ .layout {{ grid-template-columns: 1fr; }} svg {{ height: 520px; }} }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OKF Graph Report</h1>
+    <div class="muted">Bundle: <code>{bundle}</code></div>
+    <div class="stats">
+      <span class="stat"><b>{node_count}</b> nodes</span>
+      <span class="stat"><b>{edge_count}</b> edges</span>
+      <span class="stat"><b id="visible-count">{node_count}</b> visible</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Filter by id, title, type, description, tags…" aria-label="Filter nodes">
+        <select id="type-filter" aria-label="Filter by type"><option value="">All types</option></select>
+      </div>
+      <svg id="graph" role="img" aria-label="OKF concept graph"></svg>
+    </section>
+
+    <aside class="panel">
+      <h2>Selected concept</h2>
+      <div id="details" class="side muted">Select a node in the graph or table.</div>
+    </aside>
+
+    <section class="panel">
+      <h2>Concept types</h2>
+      <div class="chips">{type_badges}</div>
+    </section>
+
+    <section class="panel">
+      <h2>Nodes</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Title</th><th>Type</th><th>Links</th></tr></thead>
+          <tbody id="node-table"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const graph = JSON.parse({graph_json_literal});
+    const nodes = (graph.nodes || []).map((node, index) => ({{ ...node, index }}));
+    const edges = graph.edges || [];
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const outgoing = new Map();
+    const incoming = new Map();
+    for (const edge of edges) {{
+      if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+      if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+      outgoing.get(edge.source).push(edge);
+      incoming.get(edge.target).push(edge);
+    }}
+
+    const palette = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#60a5fa', '#f472b6', '#2dd4bf', '#c084fc', '#f97316'];
+    const types = [...new Set(nodes.map(node => node.type || 'Concept'))].sort();
+    const colorByType = new Map(types.map((type, index) => [type, palette[index % palette.length]]));
+
+    const svg = document.getElementById('graph');
+    const search = document.getElementById('search');
+    const typeFilter = document.getElementById('type-filter');
+    const table = document.getElementById('node-table');
+    const details = document.getElementById('details');
+    const visibleCount = document.getElementById('visible-count');
+    let selectedId = null;
+
+    for (const type of types) {{
+      const option = document.createElement('option');
+      option.value = type;
+      option.textContent = type;
+      typeFilter.appendChild(option);
+    }}
+
+    function textOf(node) {{
+      return [node.id, node.path, node.type, node.title, node.description, (node.tags || []).join(' ')].join(' ').toLowerCase();
+    }}
+
+    function visibleNodes() {{
+      const q = search.value.trim().toLowerCase();
+      const type = typeFilter.value;
+      return nodes.filter(node => (!type || (node.type || 'Concept') === type) && (!q || textOf(node).includes(q)));
+    }}
+
+    function layout(list) {{
+      const width = svg.clientWidth || 900;
+      const height = svg.clientHeight || 620;
+      const cx = width / 2;
+      const cy = height / 2;
+      const radius = Math.max(80, Math.min(width, height) * 0.38);
+      const visibleSet = new Set(list.map(node => node.id));
+      list.forEach((node, i) => {{
+        const angle = (Math.PI * 2 * i) / Math.max(1, list.length);
+        node.x = cx + Math.cos(angle) * radius * (0.65 + (i % 5) * 0.07);
+        node.y = cy + Math.sin(angle) * radius * (0.65 + (i % 7) * 0.05);
+      }});
+      const visibleEdges = edges.filter(edge => visibleSet.has(edge.source) && visibleSet.has(edge.target));
+      for (let step = 0; step < 180; step++) {{
+        for (let i = 0; i < list.length; i++) {{
+          for (let j = i + 1; j < list.length; j++) {{
+            const a = list[i];
+            const b = list[j];
+            let dx = a.x - b.x;
+            let dy = a.y - b.y;
+            let d2 = Math.max(36, dx * dx + dy * dy);
+            const force = Math.min(4, 900 / d2);
+            const d = Math.sqrt(d2);
+            dx /= d; dy /= d;
+            a.x += dx * force; a.y += dy * force;
+            b.x -= dx * force; b.y -= dy * force;
+          }}
+        }}
+        for (const edge of visibleEdges) {{
+          const a = byId.get(edge.source);
+          const b = byId.get(edge.target);
+          if (!a || !b) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          a.x += dx * 0.01; a.y += dy * 0.01;
+          b.x -= dx * 0.01; b.y -= dy * 0.01;
+        }}
+        for (const node of list) {{
+          node.x += (cx - node.x) * 0.006;
+          node.y += (cy - node.y) * 0.006;
+          node.x = Math.max(30, Math.min(width - 30, node.x));
+          node.y = Math.max(30, Math.min(height - 30, node.y));
+        }}
+      }}
+      return visibleEdges;
+    }}
+
+    function escapeText(value) {{ return value == null ? '' : String(value); }}
+
+    function selectNode(id) {{
+      selectedId = id;
+      const node = byId.get(id);
+      if (!node) return;
+      const out = outgoing.get(id) || [];
+      const inc = incoming.get(id) || [];
+      const tags = Array.isArray(node.tags) ? node.tags.join(', ') : escapeText(node.tags);
+      details.classList.remove('muted');
+      details.innerHTML = '';
+      const dl = document.createElement('dl');
+      const rows = [
+        ['Title', node.title || node.id],
+        ['ID', node.id],
+        ['Path', node.path || ''],
+        ['Type', node.type || 'Concept'],
+        ['Description', node.description || ''],
+        ['Tags', tags],
+        ['Outgoing links', out.map(edge => edge.target).join('\n') || '—'],
+        ['Incoming links', inc.map(edge => edge.source).join('\n') || '—'],
+      ];
+      for (const [key, value] of rows) {{
+        const dt = document.createElement('dt'); dt.textContent = key;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        dl.append(dt, dd);
+      }}
+      details.appendChild(dl);
+      render();
+    }}
+
+    function renderTable(list) {{
+      table.innerHTML = '';
+      for (const node of list) {{
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td></td><td></td><td></td>';
+        tr.children[0].textContent = node.title || node.id;
+        tr.children[1].textContent = node.type || 'Concept';
+        tr.children[2].textContent = `${{(outgoing.get(node.id) || []).length}} out / ${{(incoming.get(node.id) || []).length}} in`;
+        tr.addEventListener('click', () => selectNode(node.id));
+        table.appendChild(tr);
+      }}
+    }}
+
+    function render() {{
+      const list = visibleNodes();
+      const visibleSet = new Set(list.map(node => node.id));
+      const visibleEdges = layout(list);
+      visibleCount.textContent = String(list.length);
+      svg.innerHTML = '';
+      const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const nodeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      svg.append(edgeLayer, nodeLayer);
+
+      for (const edge of visibleEdges) {{
+        const source = byId.get(edge.source);
+        const target = byId.get(edge.target);
+        if (!source || !target) continue;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', source.x); line.setAttribute('y1', source.y);
+        line.setAttribute('x2', target.x); line.setAttribute('y2', target.y);
+        const active = selectedId && (edge.source === selectedId || edge.target === selectedId);
+        line.setAttribute('class', 'edge' + (active ? ' active' : selectedId ? ' dim' : ''));
+        edgeLayer.appendChild(line);
+      }}
+
+      for (const node of list) {{
+        const degree = (outgoing.get(node.id) || []).length + (incoming.get(node.id) || []).length;
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const related = !selectedId || selectedId === node.id || visibleEdges.some(edge =>
+          (edge.source === selectedId && edge.target === node.id) || (edge.target === selectedId && edge.source === node.id)
+        );
+        group.setAttribute('class', 'node' + (node.id === selectedId ? ' selected' : related ? '' : ' dim'));
+        group.setAttribute('transform', `translate(${{node.x}},${{node.y}})`);
+        group.addEventListener('click', () => selectNode(node.id));
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('r', Math.min(22, 8 + Math.sqrt(degree + 1) * 4));
+        circle.setAttribute('fill', colorByType.get(node.type || 'Concept') || '#38bdf8');
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        title.textContent = `${{node.title || node.id}}\n${{node.id}}`;
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dy', 32);
+        text.textContent = (node.title || node.id).slice(0, 28);
+        group.append(title, circle, text);
+        nodeLayer.appendChild(group);
+      }}
+      renderTable(list);
+    }}
+
+    search.addEventListener('input', render);
+    typeFilter.addEventListener('change', render);
+    svg.addEventListener('click', event => {{ if (event.target === svg) {{ selectedId = null; details.textContent = 'Select a node in the graph or table.'; details.classList.add('muted'); render(); }} }});
+    window.addEventListener('resize', render);
+    render();
+  </script>
+</body>
+</html>
+"""
 
 
 class OKFBundle:
@@ -444,6 +762,33 @@ class OKFBundle:
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(graph, ensure_ascii=False) + "\n", encoding="utf-8")
         return {"path": out.relative_to(self.root).as_posix(), **graph}
+
+    def render_graph_html(self, graph: dict[str, Any] | None = None) -> str:
+        """Return a self-contained HTML report for the OKF graph."""
+        return _render_graph_html(graph or self.build_graph())
+
+    def write_graph_html(
+        self,
+        out_path: str | Path = "graph.html",
+        *,
+        graph: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Write a self-contained HTML graph report inside the bundle."""
+        graph_data = graph or self.build_graph()
+        out = Path(out_path)
+        if not out.is_absolute():
+            out = self.root / out
+        out = out.resolve()
+        self._assert_inside(out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        html_text = self.render_graph_html(graph_data)
+        out.write_text(html_text, encoding="utf-8")
+        return {
+            "path": out.relative_to(self.root).as_posix(),
+            "bytes": len(html_text.encode("utf-8")),
+            "node_count": graph_data.get("node_count", 0),
+            "edge_count": graph_data.get("edge_count", 0),
+        }
 
     def _render_index(self, directory: Path) -> str:
         lines: list[str] = [f"# {_dir_title(directory, self.root)}", ""]

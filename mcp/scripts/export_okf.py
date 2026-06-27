@@ -105,7 +105,7 @@ def export(source: Path, out: Path, force: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export Markdown docs into OKF Source Document concepts")
     parser.add_argument("--source", default="system", help="Canonical Markdown source directory")
-    parser.add_argument("--out", default="okr", help="OKF bundle output directory")
+    parser.add_argument("--out", default="okf", help="OKF bundle output directory")
     parser.add_argument("--force", action="store_true", help="Overwrite existing generated concepts")
     args = parser.parse_args()
     return export(Path(args.source), Path(args.out), args.force)

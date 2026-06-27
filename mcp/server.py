@@ -7,10 +7,14 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from okf_mcp import __version__
-from okf_mcp.okf import OKFBundle
+try:
+    from . import __version__
+    from .okf import OKFBundle
+except ImportError:  # Allows running from the `mcp/` directory as a script.
+    from __init__ import __version__
+    from okf import OKFBundle
 
-DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okr")
+DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
 
 
 def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
@@ -153,15 +157,22 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         return bundle.export_source_documents(source, force=force)
 
     @mcp.tool
-    def build_graph(write: bool = False, out_path: str = "graph.json") -> dict[str, Any]:
+    def build_graph(
+        write: bool = False,
+        out_path: str = "graph.json",
+        html: bool = False,
+        html_out_path: str = "graph.html",
+    ) -> dict[str, Any]:
         """Build the OKF concept/link graph.
 
         If `write` is true, also write the graph JSON inside the bundle at
-        `out_path` (defaults to `graph.json`).
+        `out_path` (defaults to `graph.json`). If `html` is true, also write a
+        self-contained HTML graph report at `html_out_path`.
         """
-        if write:
-            return bundle.write_graph(out_path)
-        return bundle.build_graph()
+        graph = bundle.write_graph(out_path) if write else bundle.build_graph()
+        if html:
+            graph["html_report"] = bundle.write_graph_html(html_out_path, graph=graph)
+        return graph
 
     @mcp.resource("okf://bundle/info", mime_type="application/json")
     def bundle_info_resource() -> str:
@@ -189,7 +200,7 @@ Workflow:
 1. Call read_existing_doc(concept_id) first. If it exists, preserve useful body text and unknown frontmatter keys.
 2. Use list_concepts() to discover valid cross-link targets.
 3. Write exactly one concept with write_concept_doc(concept_id, frontmatter, body).
-4. Call generate_indexes(), build_graph(write=True), and validate_bundle() after file changes.
+4. Call generate_indexes(), build_graph(write=True, html=True), and validate_bundle() after file changes.
 
 Rules:
 - frontmatter.type is required.
