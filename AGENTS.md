@@ -52,6 +52,25 @@ requirements/functions/FUNC-001
 api/operations/create-project
 ```
 
+## 7D Process Rules
+
+7D is a process registry over existing OKF concept types. It does not change the
+OKF concept format.
+
+- Do not add 7D-specific frontmatter keys such as `process`, `stage`,
+  `stage_order`, `artifact_key`, `gate_decision`, or `raci` solely to support
+  7D.
+- Do not create generic 7D concept types such as `Lifecycle Artifact`,
+  `Lifecycle Check`, `Role`, or `Decision Gate` when the artifact type is known.
+- Use the existing `type` field as the artifact type, for example `PRD`,
+  `Architecture & NFR`, or `Test Report`.
+- Resolve 7D stage and responsibility from the registry table in `SPEC.md` or
+  the MCP 7D tools, not from per-concept 7D metadata.
+- Derive a feature's 7D progress from linked artifact concepts and their types;
+  if the type is not in the registry, report a gap.
+- Keep 7D behavior out of `.agents/skills/okf/SKILL.md`; this file and
+  `SPEC.md` are the repository-level sources for 7D working rules.
+
 ## OKF Workflows
 
 For OKF content work, prefer the `simple-okf` MCP server when available:
@@ -64,6 +83,11 @@ search_concepts
 read_concept
 write_concept_doc
 validate_bundle
+seven_d_registry
+seven_d_mapping_for_type
+list_7d_artifact_concepts
+seven_d_feature_status
+validate_7d
 generate_indexes
 build_graph
 ```
@@ -157,7 +181,7 @@ Before completing repository changes, run the relevant subset:
 ```sh
 python3 -m py_compile mcp/__init__.py mcp/__main__.py mcp/okf.py mcp/server.py mcp/scripts/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
 python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
 git diff --check
 git status --short
 git diff --stat
@@ -171,7 +195,7 @@ For OKF content additions/removals/renames, also run:
 
 ```sh
 python3 mcp/scripts/generate_okf_indexes.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
 python3 mcp/scripts/validate_okf.py okf
 ```
 

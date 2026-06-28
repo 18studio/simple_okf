@@ -157,6 +157,31 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         return bundle.validate()
 
     @mcp.tool
+    def seven_d_registry() -> dict[str, Any]:
+        """Return the 7D stage and OKF artifact-type mapping registry."""
+        return bundle.seven_d_registry()
+
+    @mcp.tool
+    def seven_d_mapping_for_type(type_name: str) -> dict[str, Any] | None:
+        """Return 7D stage and responsibility mapping for an OKF concept type."""
+        return bundle.seven_d_mapping_for_type(type_name)
+
+    @mcp.tool
+    def list_7d_artifact_concepts(stage: str | None = None) -> list[dict[str, Any]]:
+        """List concepts whose `type` is registered in the 7D artifact table."""
+        return bundle.list_7d_artifact_concepts(stage=stage)
+
+    @mcp.tool
+    def seven_d_feature_status(concept_id: str) -> dict[str, Any]:
+        """Derive a concept's 7D progress from linked artifact concept types."""
+        return bundle.seven_d_feature_status(concept_id)
+
+    @mcp.tool
+    def validate_7d() -> dict[str, Any]:
+        """Validate 7D registry usage without requiring 7D-specific frontmatter."""
+        return bundle.validate_7d()
+
+    @mcp.tool
     def generate_indexes() -> dict[str, Any]:
         """Regenerate index.md files for every directory in the OKF bundle."""
         return bundle.generate_indexes()
@@ -185,7 +210,12 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         """
         graph = bundle.write_graph(out_path) if write else bundle.build_graph()
         if html:
-            graph["html_report"] = bundle.write_graph_html(html_out_path, graph=graph)
+            graph_for_html = {
+                key: graph[key]
+                for key in ("bundle", "node_count", "edge_count", "nodes", "edges")
+                if key in graph
+            }
+            graph["html_report"] = bundle.write_graph_html(html_out_path, graph=graph_for_html)
         return graph
 
     def _rag_settings_and_retriever() -> tuple[Any, LocalOKFRetriever]:

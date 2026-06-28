@@ -104,7 +104,7 @@ Do not duplicate OKF logic in scripts.
 python3 mcp/scripts/validate_okf.py okf
 python3 mcp/scripts/generate_okf_indexes.py okf
 python3 mcp/scripts/export_okf.py --source system --out okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
 python3 mcp/scripts/inspect_rag_corpus.py --pretty
 python3 mcp/scripts/refresh_rag_index.py --pretty
 python3 mcp/scripts/rag_retrieve.py "query" --pretty
@@ -339,7 +339,7 @@ For repository/tooling changes, use local checks as appropriate:
 ```sh
 python3 -m py_compile mcp/__init__.py mcp/__main__.py mcp/okf.py mcp/server.py mcp/scripts/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
 python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
 git diff --check
 git status --short
 git diff --stat

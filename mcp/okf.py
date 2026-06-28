@@ -16,6 +16,178 @@ _FRONTMATTER_DELIM = "---"
 _CONCEPT_SEGMENT_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 _LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 
+SEVEN_D_STAGES: tuple[dict[str, Any], ...] = (
+    {
+        "key": "discover",
+        "name": "Discover",
+        "order": 1,
+        "description": "Problem and value discovery before product and technical design.",
+    },
+    {
+        "key": "design",
+        "name": "Design",
+        "order": 2,
+        "description": "Product, architecture, constraints, scenarios, and readiness design.",
+    },
+    {
+        "key": "develop",
+        "name": "Develop",
+        "order": 3,
+        "description": "Implementation and initial quality verification.",
+    },
+    {
+        "key": "deploy",
+        "name": "Deploy",
+        "order": 4,
+        "description": "Safe deployment to preview or another limited release contour.",
+    },
+    {
+        "key": "day-to-day",
+        "name": "Day-to-day",
+        "order": 5,
+        "description": "Real usage, feedback collection, and improvement planning.",
+    },
+    {
+        "key": "defend",
+        "name": "Defend",
+        "order": 6,
+        "description": "Production-grade security, reliability, support, and GA readiness.",
+    },
+    {
+        "key": "decommission",
+        "name": "Decommission",
+        "order": 7,
+        "description": "Managed shutdown, migration, and final completion confirmation.",
+    },
+)
+
+SEVEN_D_ARTIFACT_TYPE_REGISTRY: tuple[dict[str, Any], ...] = (
+    {
+        "type": "Product Brief",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Support / GTM", "Tech Lead"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Go / No-Go to Design",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "Sponsor",
+        "consulted": ["Tech Lead", "Security", "SRE"],
+        "informed": ["Support / GTM"],
+    },
+    {
+        "type": "PRD",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA", "Support / GTM"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Architecture & NFR",
+        "stage": "design",
+        "responsible": ["Tech Lead / Architect"],
+        "accountable": "Tech Lead / Architect",
+        "consulted": ["SRE", "Security", "QA"],
+        "informed": ["PM"],
+    },
+    {
+        "type": "Release Candidate",
+        "stage": "develop",
+        "responsible": ["Tech Lead / Engineering"],
+        "accountable": "Tech Lead",
+        "consulted": ["QA", "Security", "SRE"],
+        "informed": ["PM"],
+    },
+    {
+        "type": "Test Report",
+        "stage": "develop",
+        "responsible": ["QA"],
+        "accountable": "QA",
+        "consulted": ["Tech Lead", "PM"],
+        "informed": ["SRE"],
+    },
+    {
+        "type": "Deployment & Rollback Plan",
+        "stage": "deploy",
+        "responsible": ["SRE"],
+        "accountable": "SRE",
+        "consulted": ["Tech Lead", "QA", "Security"],
+        "informed": ["PM"],
+    },
+    {
+        "type": "Preview Launch Package",
+        "stage": "deploy",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["QA", "Support / GTM", "SRE"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Usage & Feedback Report",
+        "stage": "day-to-day",
+        "responsible": ["PM", "Support / GTM"],
+        "accountable": "PM",
+        "consulted": ["SRE", "QA", "Tech Lead"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Improvement Backlog",
+        "stage": "day-to-day",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA", "Support / GTM"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "GA Readiness Checklist",
+        "stage": "defend",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "SRE", "QA", "Security", "Support / GTM"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Security & Reliability Approval",
+        "stage": "defend",
+        "responsible": ["Security", "SRE"],
+        "accountable": "Security / SRE",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["PM", "Sponsor"],
+    },
+    {
+        "type": "Decommission / Migration Plan",
+        "stage": "decommission",
+        "responsible": ["PM", "Tech Lead", "SRE"],
+        "accountable": "PM",
+        "consulted": ["Security", "Support / GTM"],
+        "informed": ["Sponsor"],
+    },
+    {
+        "type": "Final Shutdown Report",
+        "stage": "decommission",
+        "responsible": ["PM", "SRE"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "Security"],
+        "informed": ["Sponsor"],
+    },
+)
+
+_SEVEN_D_STAGE_BY_KEY = {stage["key"]: stage for stage in SEVEN_D_STAGES}
+_SEVEN_D_TYPE_BY_NAME = {item["type"].casefold(): item for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY}
+_SEVEN_D_FRONTMATTER_KEYS = {
+    "process",
+    "stage",
+    "stage_order",
+    "artifact_key",
+    "artifact_order",
+    "gate_decision",
+    "raci",
+}
+
 
 class OKFError(ValueError):
     """Raised when an OKF operation cannot be completed."""
@@ -98,6 +270,26 @@ def _jsonable(value: Any) -> Any:
 
 def _safe_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
     return {str(k): _jsonable(v) for k, v in frontmatter.items()}
+
+
+def _seven_d_mapping_for_type(type_name: str) -> dict[str, Any] | None:
+    item = _SEVEN_D_TYPE_BY_NAME.get(type_name.strip().casefold())
+    if not item:
+        return None
+    mapping = {str(key): _jsonable(value) for key, value in item.items()}
+    stage = _SEVEN_D_STAGE_BY_KEY.get(str(item["stage"]))
+    if stage:
+        mapping["stage_name"] = stage["name"]
+        mapping["stage_order"] = stage["order"]
+    return mapping
+
+
+def _seven_d_stage_key(stage: str) -> str:
+    value = stage.strip().casefold()
+    for item in SEVEN_D_STAGES:
+        if value in {str(item["key"]).casefold(), str(item["name"]).casefold()}:
+            return str(item["key"])
+    raise OKFError(f"Unknown 7D stage: {stage}")
 
 
 def _snippet(text: str, limit: int = 280) -> str:
@@ -622,6 +814,156 @@ class OKFBundle:
                 scored.append((score, item))
         scored.sort(key=lambda pair: (-pair[0], pair[1]["id"]))
         return [item for _, item in scored[: max(1, int(limit))]]
+
+    def seven_d_registry(self) -> dict[str, Any]:
+        """Return the static 7D stage and artifact-type mapping registry."""
+        return {
+            "stages": [_safe_frontmatter(dict(item)) for item in SEVEN_D_STAGES],
+            "artifact_types": [_safe_frontmatter(dict(item)) for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY],
+        }
+
+    def seven_d_mapping_for_type(self, type_name: str) -> dict[str, Any] | None:
+        """Return the 7D mapping for an OKF concept type, if one exists."""
+        return _seven_d_mapping_for_type(type_name)
+
+    def list_7d_artifact_concepts(self, stage: str | None = None) -> list[dict[str, Any]]:
+        """List concepts whose `type` is registered as a 7D artifact type."""
+        stage_key = _seven_d_stage_key(stage) if stage else None
+        out: list[dict[str, Any]] = []
+        for concept in self.list_concepts():
+            mapping = _seven_d_mapping_for_type(str(concept.get("type") or ""))
+            if not mapping:
+                continue
+            if stage_key and mapping.get("stage") != stage_key:
+                continue
+            item = dict(concept)
+            item["seven_d"] = mapping
+            out.append(item)
+        out.sort(
+            key=lambda item: (
+                int(item["seven_d"].get("stage_order") or 0),
+                str(item.get("type") or ""),
+                str(item.get("id") or ""),
+            )
+        )
+        return out
+
+    def seven_d_feature_status(self, concept_id: str) -> dict[str, Any]:
+        """Derive a concept's 7D progress from its own or linked artifact types."""
+        concept = self.read_concept(concept_id, include_body=False)
+        graph = self.build_graph()
+        nodes = {str(node.get("id")): node for node in graph.get("nodes", []) if isinstance(node, dict)}
+        if concept["id"] not in nodes:
+            raise OKFError(f"Concept does not exist in graph: {concept_id}")
+
+        related: dict[str, set[str]] = {concept["id"]: {"self"}}
+        for edge in graph.get("edges", []):
+            if not isinstance(edge, dict):
+                continue
+            source = str(edge.get("source") or "")
+            target = str(edge.get("target") or "")
+            if source == concept["id"] and target:
+                related.setdefault(target, set()).add("outgoing")
+            if target == concept["id"] and source:
+                related.setdefault(source, set()).add("incoming")
+
+        artifacts: list[dict[str, Any]] = []
+        gaps: list[dict[str, Any]] = []
+        for related_id, directions in related.items():
+            node = nodes.get(related_id)
+            if not node:
+                continue
+            node_type = str(node.get("type") or "")
+            mapping = _seven_d_mapping_for_type(node_type)
+            if not mapping:
+                if related_id != concept["id"]:
+                    gaps.append(
+                        {
+                            "id": related_id,
+                            "path": node.get("path", ""),
+                            "type": node_type,
+                            "title": node.get("title", related_id),
+                            "relationship": sorted(directions),
+                            "reason": "Concept type is not registered in the 7D artifact-type registry.",
+                        }
+                    )
+                continue
+            artifacts.append(
+                {
+                    "id": related_id,
+                    "path": node.get("path", ""),
+                    "type": node_type,
+                    "title": node.get("title", related_id),
+                    "description": node.get("description", ""),
+                    "relationship": sorted(directions),
+                    "seven_d": mapping,
+                }
+            )
+
+        gaps.sort(key=lambda item: (str(item.get("id") or ""), str(item.get("relationship") or "")))
+        artifacts.sort(
+            key=lambda item: (
+                int(item["seven_d"].get("stage_order") or 0),
+                str(item.get("type") or ""),
+                str(item.get("id") or ""),
+            )
+        )
+        current = artifacts[-1]["seven_d"] if artifacts else None
+        return {
+            "concept": concept,
+            "derived_stage": current,
+            "artifact_count": len(artifacts),
+            "artifacts": artifacts,
+            "gaps": gaps,
+            "gap_count": len(gaps),
+            "note": (
+                "7D stage is derived from the highest-order registered artifact type linked to the concept."
+                if artifacts
+                else "No linked concepts with registered 7D artifact types were found."
+            ),
+        }
+
+    def validate_7d(self) -> dict[str, Any]:
+        """Validate 7D registry usage without changing the OKF concept format."""
+        self.ensure_exists()
+        errors: list[str] = []
+        warnings: list[str] = []
+        mapped_count = 0
+
+        stage_keys = {str(item["key"]) for item in SEVEN_D_STAGES}
+        for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY:
+            if item["stage"] not in stage_keys:
+                errors.append(f"7D registry type `{item['type']}` references unknown stage `{item['stage']}`")
+            accountable = str(item.get("accountable") or "").strip()
+            if not accountable:
+                errors.append(f"7D registry type `{item['type']}` has no accountable role")
+
+        for path in self.iter_concepts():
+            rel = path.relative_to(self.root).as_posix()
+            try:
+                doc = OKFDocument.parse(path.read_text(encoding="utf-8"))
+            except OKFError as exc:
+                errors.append(f"{rel}: {exc}")
+                continue
+            typ = str(doc.frontmatter.get("type") or "")
+            if _seven_d_mapping_for_type(typ):
+                mapped_count += 1
+            disallowed = sorted(key for key in _SEVEN_D_FRONTMATTER_KEYS if key in doc.frontmatter)
+            if disallowed:
+                warnings.append(
+                    f"{rel}: 7D should be derived from `type`; avoid 7D-specific frontmatter keys: "
+                    f"{', '.join(disallowed)}"
+                )
+
+        return {
+            "bundle": str(self.root),
+            "mapped_concept_count": mapped_count,
+            "registered_artifact_type_count": len(SEVEN_D_ARTIFACT_TYPE_REGISTRY),
+            "stage_count": len(SEVEN_D_STAGES),
+            "errors": errors,
+            "warnings": warnings,
+            "ok": not errors,
+        }
 
     def list_directory(self, directory: str = "") -> dict[str, Any]:
         self.ensure_exists()

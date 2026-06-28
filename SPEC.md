@@ -1,6 +1,6 @@
 # OKF Project Template Specification
 
-Template version: `0.3`
+Template version: `0.4`
 
 ## Purpose
 
@@ -10,6 +10,7 @@ The template is intentionally limited to:
 
 - OKF bundle structure;
 - Markdown concepts with YAML frontmatter;
+- a 7D process registry over OKF concept types;
 - Markdown links as a graph;
 - a FastMCP server for agent access to the bundle;
 - a local OKF-aware RAG layer over concepts;
@@ -93,13 +94,64 @@ Rules:
 - unknown frontmatter fields are allowed;
 - producer-specific fields must be preserved during editing.
 
-### 3. Navigation files
+### 3. 7D process registry
+
+7D describes only the process stages for cloud-service feature elaboration. It
+must not change the OKF concept format. Do not add 7D-specific fields such as
+`process`, `stage`, `stage_order`, `artifact_key`, `gate_decision`, or `raci` to
+concept frontmatter solely to support 7D.
+
+The 7D stage for a concept is derived from its existing `type` value by a
+separate registry table. The type remains the artifact name and does not embed
+extra stage or ownership metadata.
+
+Stages are sequential:
+
+| Order | Stage | Meaning |
+|---:|---|---|
+| 1 | Discover | Problem, user, value, and investment discovery. |
+| 2 | Design | Product behavior, architecture, constraints, scenarios, and readiness design. |
+| 3 | Develop | Implementation and initial quality verification. |
+| 4 | Deploy | Safe deployment to preview or another limited release contour. |
+| 5 | Day-to-day | Real usage, feedback collection, and improvement planning. |
+| 6 | Defend | Production-grade security, reliability, support, and GA readiness. |
+| 7 | Decommission | Managed shutdown, migration, and final completion confirmation. |
+
+Artifact-type registry:
+
+| OKF `type` | 7D stage | R — Responsible | A — Accountable | C — Consulted | I — Informed |
+|---|---|---|---|---|---|
+| Product Brief | Discover | PM | PM | Support / GTM, Tech Lead | Sponsor |
+| Go / No-Go to Design | Discover | PM | Sponsor | Tech Lead, Security, SRE | Support / GTM |
+| PRD | Design | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
+| Architecture & NFR | Design | Tech Lead / Architect | Tech Lead / Architect | SRE, Security, QA | PM |
+| Release Candidate | Develop | Tech Lead / Engineering | Tech Lead | QA, Security, SRE | PM |
+| Test Report | Develop | QA | QA | Tech Lead, PM | SRE |
+| Deployment & Rollback Plan | Deploy | SRE | SRE | Tech Lead, QA, Security | PM |
+| Preview Launch Package | Deploy | PM | PM | QA, Support / GTM, SRE | Sponsor |
+| Usage & Feedback Report | Day-to-day | PM, Support / GTM | PM | SRE, QA, Tech Lead | Sponsor |
+| Improvement Backlog | Day-to-day | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
+| GA Readiness Checklist | Defend | PM | PM | Tech Lead, SRE, QA, Security, Support / GTM | Sponsor |
+| Security & Reliability Approval | Defend | Security, SRE | Security / SRE | Tech Lead, QA | PM, Sponsor |
+| Decommission / Migration Plan | Decommission | PM, Tech Lead, SRE | PM | Security, Support / GTM | Sponsor |
+| Final Shutdown Report | Decommission | PM, SRE | PM | Tech Lead, Security | Sponsor |
+
+A feature's 7D progress is derived from the highest-order registered artifact
+type among concepts linked to that feature. If a linked artifact type is absent
+from the registry, the 7D stage for that artifact is unknown and should be
+reported as a gap rather than encoded in extra frontmatter.
+
+The MCP server exposes 7D helper tools over this registry. These tools must read
+normal OKF concepts and derive 7D state from `frontmatter.type` and Markdown
+links.
+
+### 4. Navigation files
 
 `index.md` is a directory navigation file. It is not considered a concept.
 
 `log.md` is a changelog. It is not considered a concept.
 
-### 4. Links as graph
+### 5. Links as graph
 
 Relationships are expressed with Markdown links:
 
@@ -110,7 +162,7 @@ and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 
 The relationship type is defined by the surrounding text. Relative links are preferred for internal relationships.
 
-### 5. OKF Skill
+### 6. OKF Skill
 
 Project skill:
 
@@ -127,7 +179,7 @@ Use cases:
 - generate graph JSON;
 - navigate the bundle as an agent-readable knowledge base.
 
-### 6. Skill templates and references
+### 7. Skill templates and references
 
 The skill stores only instructions, templates, and reference materials:
 
@@ -143,7 +195,7 @@ The functionality of the former skill scripts has been moved to the MCP server/t
 mcp/scripts/
 ```
 
-### 7. OKF-aware RAG
+### 8. OKF-aware RAG
 
 The local RAG layer uses OKF concepts as its corpus. The runtime environment is loaded from this file:
 
@@ -173,7 +225,7 @@ The RAG parser must:
 - include frontmatter context in searchable chunks;
 - resolve Markdown links between concepts as graph context.
 
-### 8. FastMCP server
+### 9. FastMCP server
 
 The MCP server is located here:
 
@@ -195,6 +247,11 @@ sample_rows
 read_support_file
 write_concept_doc
 validate_bundle
+seven_d_registry
+seven_d_mapping_for_type
+list_7d_artifact_concepts
+seven_d_feature_status
+validate_7d
 generate_indexes
 export_source_documents
 build_graph
@@ -223,7 +280,7 @@ The primary agent-facing contract is MCP:
 validate_okf.py           -> validate_bundle
 generate_okf_indexes.py   -> generate_indexes
 export_okf.py             -> export_source_documents
-generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
+generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
 ```
 
 CLI fallback:
@@ -232,7 +289,7 @@ CLI fallback:
 python3 mcp/scripts/validate_okf.py okf
 python3 mcp/scripts/generate_okf_indexes.py okf
 python3 mcp/scripts/export_okf.py --source system --out okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
 python3 mcp/scripts/inspect_rag_corpus.py --pretty
 python3 mcp/scripts/refresh_rag_index.py --pretty
 python3 mcp/scripts/rag_retrieve.py "project access" --pretty
