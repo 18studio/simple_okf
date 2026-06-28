@@ -38,6 +38,9 @@ same rule in a secondary location.
 - The minimum required concept frontmatter key is `type`.
 - Recommended keys are `title`, `description`, and `timestamp`.
 - Preserve unknown frontmatter fields when editing existing concepts.
+- Write OKF concept and support documentation in English. Before creating or
+  updating OKF documents from non-English input, translate the content into
+  English while preserving meaning.
 - Use relative Markdown links for internal OKF relationships.
 - Do not invent requirement IDs, schema details, citations, source paths, or
   domain facts.
