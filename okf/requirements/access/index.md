@@ -1,3 +1,3 @@
-# Access Rules
+# Access
 
-Authorization, role, and permission concepts.
+No concepts yet.

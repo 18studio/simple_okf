@@ -1,3 +1,3 @@
-# UI Kit
+# Uikit
 
-Reusable UI component concepts.
+No concepts yet.

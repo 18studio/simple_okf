@@ -1,3 +1,3 @@
-# Source Documents
+# Documents
 
-Source-document concepts derived from canonical project documentation.
+No concepts yet.

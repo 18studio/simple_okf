@@ -1,3 +1,5 @@
 # Architecture
 
-* [ADR](adr/index.md)
+## Directories
+
+* [Adr](adr/index.md)

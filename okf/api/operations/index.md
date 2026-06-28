@@ -1,3 +1,3 @@
-# API Operations
+# Operations
 
-API operation concepts.
+No concepts yet.

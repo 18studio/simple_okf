@@ -1,3 +1,3 @@
 # Design System
 
-Design tokens and design-system concepts.
+No concepts yet.
