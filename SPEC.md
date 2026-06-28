@@ -1,34 +1,34 @@
 # OKF Project Template Specification
 
-Версия шаблона: `0.3`
+Template version: `0.3`
 
-## Назначение
+## Purpose
 
-Этот репозиторий задаёт минимальный шаблон проекта для ведения знаний в формате OKF.
+This repository defines a minimal project template for maintaining knowledge in OKF format.
 
-Шаблон намеренно ограничен:
+The template is intentionally limited to:
 
 - OKF bundle structure;
-- Markdown concepts с YAML frontmatter;
-- Markdown links как graph;
-- FastMCP server для агентного доступа к bundle;
-- локальный OKF-aware RAG layer поверх concepts;
-- CLI scripts внутри MCP-пакета как fallback;
-- project skill для агентов.
+- Markdown concepts with YAML frontmatter;
+- Markdown links as a graph;
+- a FastMCP server for agent access to the bundle;
+- a local OKF-aware RAG layer over concepts;
+- CLI scripts inside the MCP package as a fallback;
+- a project skill for agents.
 
-Шаблон фиксирует локальный файловый контракт OKF и не требует внешних сервисов для чтения или проверки bundle.
+The template establishes the local filesystem contract for OKF and does not require external services to read or validate the bundle.
 
-## Обязательные части шаблона
+## Required template components
 
 ### 1. OKF bundle structure
 
-Основной bundle расположен здесь:
+The main bundle is located here:
 
 ```text
 okf/
 ```
 
-Базовая структура:
+Base structure:
 
 ```text
 okf/
@@ -54,9 +54,9 @@ okf/
 
 ### 2. Concept format
 
-Каждый concept — Markdown-файл с YAML frontmatter.
+Each concept is a Markdown file with YAML frontmatter.
 
-Минимум по OKF:
+Minimum OKF format:
 
 ```md
 ---
@@ -66,7 +66,7 @@ type: Reference
 Concept body.
 ```
 
-Рекомендуемый формат в этом шаблоне:
+Recommended format in this template:
 
 ```md
 ---
@@ -86,29 +86,29 @@ owner_document: API.md
 ...
 ```
 
-Правила:
+Rules:
 
-- `type` обязателен;
-- `title`, `description`, `timestamp` рекомендуются;
-- неизвестные frontmatter-поля разрешены;
-- producer-specific поля должны сохраняться при редактировании.
+- `type` is required;
+- `title`, `description`, and `timestamp` are recommended;
+- unknown frontmatter fields are allowed;
+- producer-specific fields must be preserved during editing.
 
 ### 3. Navigation files
 
-`index.md` — навигационный файл директории. Не считается concept.
+`index.md` is a directory navigation file. It is not considered a concept.
 
-`log.md` — changelog. Не считается concept.
+`log.md` is a changelog. It is not considered a concept.
 
 ### 4. Links as graph
 
-Связи задаются Markdown-ссылками:
+Relationships are expressed with Markdown links:
 
 ```md
 Creates [Project](../../data/entities/project.md)
 and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 ```
 
-Тип отношения задаётся окружающим текстом. Для внутренних связей предпочтительны относительные ссылки.
+The relationship type is defined by the surrounding text. Relative links are preferred for internal relationships.
 
 ### 5. OKF Skill
 
@@ -121,15 +121,15 @@ Project skill:
 Use cases:
 
 - create/edit OKF concepts;
-- validate OKF bundle;
+- validate the OKF bundle;
 - regenerate indexes;
-- export canonical docs;
+- export canonical documents;
 - generate graph JSON;
-- navigate bundle as an agent-readable knowledge base.
+- navigate the bundle as an agent-readable knowledge base.
 
 ### 6. Skill templates and references
 
-Skill хранит только инструкции, шаблоны и reference-материалы:
+The skill stores only instructions, templates, and reference materials:
 
 ```text
 .agents/skills/okf/SKILL.md
@@ -137,7 +137,7 @@ Skill хранит только инструкции, шаблоны и referenc
 .agents/skills/okf/references/
 ```
 
-Функции бывших skill scripts перенесены в MCP server/tools. CLI fallback scripts лежат здесь:
+The functionality of the former skill scripts has been moved to the MCP server/tools. CLI fallback scripts are located here:
 
 ```text
 mcp/scripts/
@@ -145,19 +145,19 @@ mcp/scripts/
 
 ### 7. OKF-aware RAG
 
-Локальный RAG layer использует OKF concepts как corpus. Реальное окружение загружается из файла:
+The local RAG layer uses OKF concepts as its corpus. The runtime environment is loaded from this file:
 
 ```text
 mcp/rag/.env
 ```
 
-Файл `mcp/rag/.env` не должен коммититься. Пример хранится в:
+The `mcp/rag/.env` file must not be committed. An example is stored in:
 
 ```text
 mcp/rag/.env.example
 ```
 
-Минимальные переменные:
+Minimum variables:
 
 ```dotenv
 RAG_BUNDLE_DIR=okf
@@ -166,22 +166,22 @@ RAG_RETRIEVAL_RESULT_LIMIT=10
 RAG_ANSWER_EVIDENCE_LIMIT=5
 ```
 
-RAG parser обязан:
+The RAG parser must:
 
-- исключать `index.md` и `log.md`;
-- сохранять `concept_id`, `type`, `title`, `description`, `tags`, `requirement_id`, `resource`, `source_path`;
-- включать frontmatter context в searchable chunks;
-- резолвить Markdown-ссылки между concepts как graph context.
+- exclude `index.md` and `log.md`;
+- preserve `concept_id`, `type`, `title`, `description`, `tags`, `requirement_id`, `resource`, and `source_path`;
+- include frontmatter context in searchable chunks;
+- resolve Markdown links between concepts as graph context.
 
 ### 8. FastMCP server
 
-MCP server расположен здесь:
+The MCP server is located here:
 
 ```text
 mcp/
 ```
 
-Server предоставляет tools для чтения, поиска, записи и проверки OKF bundle:
+The server provides tools for reading, searching, writing, and validating the OKF bundle:
 
 ```text
 bundle_info
@@ -207,7 +207,7 @@ rag_get_source
 rag_concept_relationships
 ```
 
-Server также предоставляет resources:
+The server also provides resources:
 
 ```text
 okf://bundle/info
@@ -217,7 +217,7 @@ okf://bundle/graph
 
 ## Tooling contract
 
-Primary agent-facing contract is MCP:
+The primary agent-facing contract is MCP:
 
 ```text
 validate_okf.py           -> validate_bundle
