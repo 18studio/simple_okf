@@ -1,71 +1,147 @@
 ---
 name: okf
 description: >
-  Work with Open Knowledge Format (OKF) bundles. Use when the user mentions
-  OKF, Open Knowledge Format, knowledge bundle, OKF bundle, agent-readable
-  knowledge, LLM wiki, validation, indexing, graph generation, search,
-  reading, or writing OKF concepts. All OKF information and operations must
-  go through the MCP server named simple-okf from .mcp.json.
+  Work with Open Knowledge Format (OKF) bundles in this repository. Use when
+  the user mentions OKF, Open Knowledge Format, knowledge bundle, OKF bundle,
+  agent-readable knowledge, LLM wiki, concepts, frontmatter, validation,
+  indexing, graph generation, search, RAG, reading, writing, or editing OKF
+  concepts. Prefer the MCP server named simple-okf from .mcp.json for OKF
+  content operations.
 metadata:
-  version: "2.0"
-  scope: local-okf-only
+  version: "3.0"
+  scope: simple-okf-local
 ---
 
 # Open Knowledge Format (OKF)
 
-Use this skill for all work with OKF bundles in this repository.
+Use this skill for OKF content, OKF tooling, and OKF-aware RAG work in this
+repository.
 
-OKF is a vendor-neutral file format for representing knowledge as:
+OKF is a portable knowledge format based on:
 
 ```text
 Markdown + YAML frontmatter + directories + Markdown links
 ```
 
-Project OKF content must be read and changed through the MCP server named `simple-okf`. Use local reference files only for format rules, not as the source of project knowledge.
+This repository is standardized on:
+
+```text
+okf/                    # default OKF bundle
+mcp/                    # MCP server, OKF library, CLI fallback, OKF RAG
+mcp/rag/.env            # local-only RAG environment file, never commit
+mcp/rag/artifacts/      # local/generated RAG artifacts
+.agents/skills/okf/     # this skill, templates, references
+```
+
+Do not reintroduce `src/okf_mcp/` or a top-level `rag/` directory.
+
+## Authority and source of truth
+
+For this project:
+
+1. `README.md` is the human quick-start.
+2. `SPEC.md` is the repository/tooling contract.
+3. `AGENTS.md` is the repository-local agent policy.
+4. `okf/` is the default knowledge bundle.
+5. `mcp/okf.py` is the shared OKF filesystem implementation.
+6. `mcp/server.py` is the MCP tool surface.
+7. `mcp/rag/` is tooling over OKF concepts, not canonical knowledge.
+
+When files disagree, update the canonical owner instead of duplicating the same
+rule in another file.
 
 ## MCP entrypoint
 
-Use the MCP server named:
+Primary MCP server name:
 
 ```text
 simple-okf
 ```
 
-`simple-okf` is configured in `.mcp.json`. Call OKF tools by this MCP name. Do not use local OKF files or script paths as the source of project information.
+`simple-okf` is configured in `.mcp.json` and runs `mcp/__main__.py` against the
+`okf/` bundle.
 
-Core operations:
+Preferred MCP tools for OKF work:
 
 ```text
-simple-okf.read_support_file(...)
-simple-okf.list_directory(...)
+simple-okf.bundle_info()
+simple-okf.read_support_file(path="index.md")
+simple-okf.list_directory(directory="")
 simple-okf.list_concepts(...)
-simple-okf.search_concepts(...)
-simple-okf.read_concept(...)
-simple-okf.write_concept_doc(...)
+simple-okf.search_concepts(query, limit)
+simple-okf.read_concept(concept_id, include_body=true)
+simple-okf.read_existing_doc(concept_id)
+simple-okf.read_concept_raw(concept_id)
+simple-okf.write_concept_doc(concept_id, frontmatter, body, ...)
 simple-okf.validate_bundle()
 simple-okf.generate_indexes()
-simple-okf.export_source_documents(...)
+simple-okf.export_source_documents(source="system", force=false)
 simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
 ```
 
+OKF-aware RAG MCP tools:
+
+```text
+simple-okf.rag_inspect_corpus(...)
+simple-okf.rag_parse_chunks()
+simple-okf.rag_refresh_index()
+simple-okf.rag_retrieve(query, limit, type_filter, tag)
+simple-okf.rag_answer(question, limit)
+simple-okf.rag_get_source(concept_id, line_start, line_end)
+simple-okf.rag_concept_relationships(concept_id, depth)
+```
+
+If `simple-okf` is unavailable during an OKF content task, report that MCP is
+unavailable. Use local CLI fallback only when the user asks to work on this
+repository/tooling or explicitly accepts fallback behavior.
+
+## CLI fallback
+
+CLI fallback scripts live in `mcp/scripts/` and call shared implementation code.
+Do not duplicate OKF logic in scripts.
+
+```sh
+python3 mcp/scripts/validate_okf.py okf
+python3 mcp/scripts/generate_okf_indexes.py okf
+python3 mcp/scripts/export_okf.py --source system --out okf
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/inspect_rag_corpus.py --pretty
+python3 mcp/scripts/refresh_rag_index.py --pretty
+python3 mcp/scripts/rag_retrieve.py "query" --pretty
+python3 mcp/scripts/rag_retrieve.py "query" --answer --pretty
+```
+
+RAG fallback reads environment from `mcp/rag/.env` by default. If the file is
+missing, use `--env /path/to/file` for smoke tests or report that RAG runtime
+validation was skipped.
+
 ## Core terminology
 
-- **Bundle** — a directory tree of `.md` files; the unit of distribution.
+- **Bundle** — a directory tree of Markdown files; unit of distribution.
 - **Concept** — one Markdown file representing one unit of knowledge.
-- **Concept ID** — file path within the bundle, minus `.md` suffix.
-- **Frontmatter** — YAML block at the top of a concept file.
-- **Body** — Markdown content after the frontmatter.
+- **Concept ID** — bundle-relative path without the `.md` suffix.
+- **Frontmatter** — YAML mapping at the top of a concept file.
+- **Body** — Markdown content after frontmatter.
+- **Support file** — navigation/history file, not a concept.
 - **Link** — Markdown link expressing a relationship between concepts.
-- **Citation** — link to a source backing a claim in the body.
+- **Citation** — link or source reference backing a claim.
+- **Derived output** — generated indexes, graph reports, or RAG artifacts.
+
+Example concept ID:
+
+```text
+requirements/functions/FUNC-001
+```
 
 ## Reserved files
 
 | File | Purpose | Concept? |
-|------|---------|----------|
+|---|---|---|
 | `index.md` | Directory navigation / progressive disclosure | No |
-| `log.md` | Change history | No |
+| `log.md` | Bundle-local change history | No |
 
-Do not treat `index.md` or `log.md` as normal concepts.
+Never treat `index.md` or `log.md` as normal concepts. RAG tools must exclude
+them from the corpus.
 
 ## Frontmatter rules
 
@@ -79,7 +155,7 @@ type: Reference
 Concept body.
 ```
 
-Recommended frontmatter in this project:
+Recommended project frontmatter:
 
 ```yaml
 ---
@@ -100,12 +176,14 @@ Rules:
 1. `type` is required.
 2. `title`, `description`, and `timestamp` are recommended.
 3. Unknown frontmatter keys are allowed.
-4. Preserve unknown fields when editing existing concepts.
-5. Do not invent fields, links, citations, schema details, or requirement IDs.
+4. Preserve unknown frontmatter keys when editing existing concepts.
+5. Do not invent fields, citations, source paths, schema details, or
+   requirement IDs.
+6. Use `tags` as a list when possible.
 
 ## Common concept types
 
-Use these types unless the user asks for another taxonomy:
+Use these unless the user or existing bundle taxonomy indicates another type:
 
 ```yaml
 type: Source Document
@@ -126,68 +204,68 @@ type: Glossary Term
 type: Reference
 ```
 
-Type values are free-form strings. Suggest a clear type, but do not reject a concept only because its type is unfamiliar.
+Type values are free-form strings. Do not reject a concept only because its
+`type` is unfamiliar.
 
 ## Links as graph
 
-Relationships are normal Markdown links.
+Relationships are normal Markdown links:
 
 ```md
 This operation creates [Project](../../data/entities/project.md)
 and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 ```
 
-The relationship type is expressed by surrounding prose, not by special link syntax.
+The relationship type is expressed by surrounding prose. Prefer relative links
+for internal OKF links because validation and graph generation resolve them
+reliably.
 
-Project convention: prefer relative links for internal bundle links because MCP validation and graph generation resolve them reliably.
-
-## Workflow: use OKF MCP
-
-For agent work, call the MCP server named `simple-okf`.
-
-Preferred `simple-okf` MCP tools:
-
-- `simple-okf.read_support_file(path="index.md")` for navigation.
-- `simple-okf.list_directory(directory="")` for directory browsing.
-- `simple-okf.list_concepts(...)` and `simple-okf.search_concepts(query, limit)` for discovery.
-- `simple-okf.read_concept(concept_id)` / `simple-okf.read_existing_doc(concept_id)` / `simple-okf.read_concept_raw(concept_id)` for reading.
-- `simple-okf.write_concept_doc(concept_id, frontmatter, body, ...)` for writing.
-- `simple-okf.validate_bundle()` for validation.
-- `simple-okf.generate_indexes()` for indexes.
-- `simple-okf.export_source_documents(source="system", force=false)` for source-document import.
-- `simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")` for graph JSON and HTML report generation.
-
-If `simple-okf` is unavailable, report that MCP is unavailable instead of silently switching to local files.
+Do not replace a missing exact target with a broad link just to satisfy
+validation. If the correct target is unknown, report the gap.
 
 ## Workflow: inspect existing bundle
 
 1. Call `simple-okf.read_support_file(path="index.md")`.
-2. Call `simple-okf.list_directory(...)`.
-3. Open only the concepts needed for the task via `simple-okf.read_concept(...)` or `simple-okf.read_concept_raw(...)`.
-4. Follow Markdown links when relationships matter by reading linked concepts through `simple-okf`.
+2. Call `simple-okf.list_directory(directory="")`.
+3. Use `simple-okf.list_concepts(...)` or `simple-okf.search_concepts(...)` for
+   discovery.
+4. Open only needed concepts with `simple-okf.read_concept(...)` or
+   `simple-okf.read_concept_raw(...)`.
+5. Follow Markdown links through `simple-okf.read_concept(...)` when
+   relationships matter.
+6. Use `simple-okf.rag_retrieve(...)` or `simple-okf.rag_answer(...)` for
+   broader semantic discovery when RAG is configured.
 
 ## Workflow: create a concept
 
-1. Discover the correct location with `simple-okf.list_directory(...)` and `simple-okf.list_concepts(...)`.
+1. Discover the right location with `list_directory` and `list_concepts`.
 2. Choose a stable concept ID.
-3. Add frontmatter with at least `type`; preferably include `title`, `description`, `timestamp`, `tags`, and source fields.
+3. Use frontmatter with at least `type`; prefer `title`, `description`,
+   `timestamp`, `tags`, and source fields when supported by evidence.
 4. Write concise Markdown body sections.
-5. Add relative links to related concepts when relationship evidence exists.
+5. Add relative links to related concepts only when there is evidence.
 6. Add citations only when there is a real source.
 7. Write via `simple-okf.write_concept_doc(...)`.
-8. Run `simple-okf.generate_indexes()` and `simple-okf.validate_bundle()`.
+8. Run `simple-okf.generate_indexes()`.
+9. Run `simple-okf.build_graph(write=true, out_path="graph.json", html=true,
+   html_out_path="graph.html")` when relationships changed.
+10. Run `simple-okf.validate_bundle()`.
 
 ## Workflow: edit a concept
 
-1. Preserve existing unknown frontmatter keys.
-2. Preserve stable IDs unless the user explicitly approves a rename.
-3. Update links if concept IDs move.
-4. Do not delete citations or schema details unless they are incorrect or obsolete.
-5. Write via `simple-okf.write_concept_doc(...)` and run `simple-okf.validate_bundle()`.
+1. Read the existing concept first.
+2. Preserve unknown frontmatter fields.
+3. Preserve stable concept IDs unless the user approves a rename.
+4. Update links if concept IDs move.
+5. Do not delete citations, schema details, or source fields unless they are
+   incorrect or obsolete.
+6. Write via `simple-okf.write_concept_doc(...)`.
+7. Regenerate derived outputs as needed.
+8. Validate the bundle.
 
 ## Workflow: export canonical Markdown docs
 
-Convert source Markdown documents into `Source Document` concepts via `simple-okf`:
+Convert source Markdown documents into `Source Document` concepts:
 
 ```text
 simple-okf.export_source_documents(source="system", force=false)
@@ -195,21 +273,54 @@ simple-okf.generate_indexes()
 simple-okf.validate_bundle()
 ```
 
-Do not treat generated OKF output as more canonical than its source unless the user explicitly changes the ownership model.
+Do not treat generated OKF output as more canonical than its source unless the
+user explicitly changes the ownership model.
 
 ## Workflow: generate graph
 
-Build graph JSON and HTML report from concepts and internal Markdown links via `simple-okf`:
+Build graph JSON and optional HTML report from concept links:
 
 ```text
 simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
 ```
 
-Use the graph report for visualization, navigation, and connectivity checks. The graph is derived output and can be regenerated.
+`okf/graph.json` and `okf/graph.html` are derived outputs and may be
+regenerated.
+
+## Workflow: use OKF RAG
+
+Use RAG for discovery and question answering over OKF concepts, not as a
+replacement for reading/editing source concepts.
+
+RAG configuration:
+
+```text
+mcp/rag/.env              # local-only, ignored
+mcp/rag/.env.example      # committed template
+mcp/rag/artifacts/        # generated artifacts
+```
+
+Default useful variables:
+
+```dotenv
+RAG_BUNDLE_DIR=okf
+RAG_ARTIFACTS_DIR=mcp/rag/artifacts
+RAG_RETRIEVAL_RESULT_LIMIT=10
+RAG_ANSWER_EVIDENCE_LIMIT=5
+```
+
+RAG rules:
+
+1. RAG corpus is OKF concepts only; exclude `index.md` and `log.md`.
+2. RAG chunks must preserve frontmatter context.
+3. RAG answers must cite `concept_id`, path, and line ranges when evidence is
+   available.
+4. RAG artifacts are derived outputs, not canonical knowledge.
+5. Never commit `mcp/rag/.env`.
 
 ## Validation expectations
 
-Before finishing OKF work, run validation through `simple-okf`:
+Before finishing OKF content work, run through MCP when available:
 
 ```text
 simple-okf.validate_bundle()
@@ -223,23 +334,38 @@ simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_pa
 simple-okf.validate_bundle()
 ```
 
-Report `simple-okf` MCP tool calls and results.
+For repository/tooling changes, use local checks as appropriate:
+
+```sh
+python3 -m py_compile mcp/__init__.py mcp/__main__.py mcp/okf.py mcp/server.py mcp/scripts/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
+python3 mcp/scripts/validate_okf.py okf
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+git diff --check
+git status --short
+git diff --stat
+```
+
+Report which MCP tools or fallback commands were run and their results.
 
 ## Guardrails
 
 1. Never invent domain facts.
 2. Preserve unknown fields.
-3. Do not impose a rigid taxonomy beyond project conventions.
-4. Prefer minimal, accurate concepts over padded concepts.
-5. Broken links may represent missing knowledge, but this project's validator reports them as errors for local quality.
-6. Ask before making broad directory or ownership changes.
-7. Keep this template local-file-first and OKF-focused.
+3. Keep stable IDs and links stable unless the user asks for a rename/move.
+4. Prefer minimal accurate concepts over padded concepts.
+5. Do not impose a rigid taxonomy beyond project conventions.
+6. Ask before broad directory, ownership, or bundle-structure changes.
+7. Do not commit local secrets or `mcp/rag/.env`.
+8. Do not create top-level `rag/` or `src/okf_mcp/`.
+9. Treat graph and RAG artifacts as derived outputs.
+10. Report unresolved missing knowledge as gaps or open questions.
 
-## Output format for created bundles
+## Output format
 
-When presenting a new or changed OKF bundle, summarize:
+When presenting OKF changes, summarize:
 
-1. directory tree;
-2. files changed;
-3. validation commands and results;
-4. remaining gaps or open questions.
+1. files changed;
+2. concepts added/edited/moved/deleted;
+3. derived outputs regenerated, if any;
+4. validation commands/MCP tools and results;
+5. remaining gaps or open questions.

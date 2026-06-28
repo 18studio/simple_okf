@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import argparse
 
-try:
-    from .server import create_mcp
-except ImportError:  # Allows running as `python mcp/__main__.py`.
-    from server import create_mcp
+
+def _load_create_mcp():
+    if __package__:
+        from .server import create_mcp
+    else:  # Allows running as `python mcp/__main__.py`.
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from mcp.server import create_mcp
+    return create_mcp
 
 
 def main() -> None:
@@ -21,6 +28,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000, help="Port for HTTP/SSE transports")
     args = parser.parse_args()
 
+    create_mcp = _load_create_mcp()
     mcp = create_mcp(args.bundle)
     if args.transport == "stdio":
         mcp.run()

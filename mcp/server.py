@@ -7,12 +7,17 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-try:
+if __package__:
     from . import __version__
     from .okf import OKFBundle
-except ImportError:  # Allows running from the `mcp/` directory as a script.
-    from __init__ import __version__
-    from okf import OKFBundle
+    from .rag import LocalOKFRetriever, OKFRagCorpus, load_settings
+else:  # Allows running this file directly.
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from mcp import __version__
+    from mcp.okf import OKFBundle
+    from mcp.rag import LocalOKFRetriever, OKFRagCorpus, load_settings
 
 DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
 
@@ -173,6 +178,81 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         if html:
             graph["html_report"] = bundle.write_graph_html(html_out_path, graph=graph)
         return graph
+
+    def _rag_settings_and_retriever() -> tuple[Any, LocalOKFRetriever]:
+        settings = load_settings()
+        return settings, LocalOKFRetriever(settings.bundle_dir)
+
+    @mcp.tool
+    def rag_inspect_corpus(correlation_id: str | None = None) -> dict[str, Any]:
+        """Inspect the OKF RAG corpus configured in `mcp/rag/.env`.
+
+        This local tool reads `RAG_BUNDLE_DIR` from `mcp/rag/.env` and treats OKF
+        concepts as documents. Support files (`index.md`, `log.md`) are not
+        included.
+        """
+        settings = load_settings()
+        inventory = OKFRagCorpus(settings.bundle_dir).inspect(correlation_id or "rag-inspect")
+        return {
+            "env_file": str(settings.env_file),
+            "artifacts_dir": str(settings.artifacts_dir),
+            **inventory.to_dict(),
+        }
+
+    @mcp.tool
+    def rag_parse_chunks() -> dict[str, Any]:
+        """Parse the configured OKF bundle into local RAG chunks for diagnostics."""
+        settings, retriever = _rag_settings_and_retriever()
+        parsed = retriever.parse()
+        return {
+            "env_file": str(settings.env_file),
+            "artifacts_dir": str(settings.artifacts_dir),
+            **parsed.to_dict(),
+        }
+
+    @mcp.tool
+    def rag_refresh_index() -> dict[str, Any]:
+        """Write a local JSON index artifact for the configured OKF RAG corpus."""
+        settings, retriever = _rag_settings_and_retriever()
+        return retriever.refresh_index(settings.artifacts_dir)
+
+    @mcp.tool
+    def rag_retrieve(
+        query: str,
+        limit: int | None = None,
+        type_filter: str | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve OKF concepts/chunks with local metadata-aware search."""
+        settings, retriever = _rag_settings_and_retriever()
+        return retriever.retrieve(
+            query,
+            limit=limit or settings.retrieval_result_limit,
+            type_filter=type_filter,
+            tag=tag,
+        )
+
+    @mcp.tool
+    def rag_answer(question: str, limit: int | None = None) -> dict[str, Any]:
+        """Return a deterministic extractive answer with OKF citations."""
+        settings, retriever = _rag_settings_and_retriever()
+        return retriever.answer(question, limit=limit or settings.answer_evidence_limit)
+
+    @mcp.tool
+    def rag_get_source(
+        concept_id: str,
+        line_start: int | None = None,
+        line_end: int | None = None,
+    ) -> dict[str, Any]:
+        """Return source lines for an OKF concept citation."""
+        _, retriever = _rag_settings_and_retriever()
+        return retriever.get_source(concept_id, line_start=line_start, line_end=line_end)
+
+    @mcp.tool
+    def rag_concept_relationships(concept_id: str, depth: int = 1) -> dict[str, Any]:
+        """Return incoming/outgoing OKF graph relationships for a concept."""
+        _, retriever = _rag_settings_and_retriever()
+        return retriever.concept_relationships(concept_id, depth=depth)
 
     @mcp.resource("okf://bundle/info", mime_type="application/json")
     def bundle_info_resource() -> str:

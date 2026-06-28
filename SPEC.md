@@ -12,6 +12,7 @@
 - Markdown concepts с YAML frontmatter;
 - Markdown links как graph;
 - FastMCP server для агентного доступа к bundle;
+- локальный OKF-aware RAG layer поверх concepts;
 - CLI scripts внутри MCP-пакета как fallback;
 - project skill для агентов.
 
@@ -139,15 +140,45 @@ Skill хранит только инструкции, шаблоны и referenc
 Функции бывших skill scripts перенесены в MCP server/tools. CLI fallback scripts лежат здесь:
 
 ```text
-src/okf_mcp/scripts/
+mcp/scripts/
 ```
 
-### 7. FastMCP server
+### 7. OKF-aware RAG
+
+Локальный RAG layer использует OKF concepts как corpus. Реальное окружение загружается из файла:
+
+```text
+mcp/rag/.env
+```
+
+Файл `mcp/rag/.env` не должен коммититься. Пример хранится в:
+
+```text
+mcp/rag/.env.example
+```
+
+Минимальные переменные:
+
+```dotenv
+RAG_BUNDLE_DIR=okf
+RAG_ARTIFACTS_DIR=mcp/rag/artifacts
+RAG_RETRIEVAL_RESULT_LIMIT=10
+RAG_ANSWER_EVIDENCE_LIMIT=5
+```
+
+RAG parser обязан:
+
+- исключать `index.md` и `log.md`;
+- сохранять `concept_id`, `type`, `title`, `description`, `tags`, `requirement_id`, `resource`, `source_path`;
+- включать frontmatter context в searchable chunks;
+- резолвить Markdown-ссылки между concepts как graph context.
+
+### 8. FastMCP server
 
 MCP server расположен здесь:
 
 ```text
-src/okf_mcp/
+mcp/
 ```
 
 Server предоставляет tools для чтения, поиска, записи и проверки OKF bundle:
@@ -167,6 +198,13 @@ validate_bundle
 generate_indexes
 export_source_documents
 build_graph
+rag_inspect_corpus
+rag_parse_chunks
+rag_refresh_index
+rag_retrieve
+rag_answer
+rag_get_source
+rag_concept_relationships
 ```
 
 Server также предоставляет resources:
@@ -191,10 +229,13 @@ generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json")
 CLI fallback:
 
 ```bash
-python3 src/okf_mcp/scripts/validate_okf.py okf
-python3 src/okf_mcp/scripts/generate_okf_indexes.py okf
-python3 src/okf_mcp/scripts/export_okf.py --source system --out okf
-python3 src/okf_mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/validate_okf.py okf
+python3 mcp/scripts/generate_okf_indexes.py okf
+python3 mcp/scripts/export_okf.py --source system --out okf
+python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json
+python3 mcp/scripts/inspect_rag_corpus.py --pretty
+python3 mcp/scripts/refresh_rag_index.py --pretty
+python3 mcp/scripts/rag_retrieve.py "project access" --pretty
 ```
 
 MCP stdio server:

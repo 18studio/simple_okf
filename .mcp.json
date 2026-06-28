@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/n.baryshnikov/Projects/18studio/simple_okf",
+        ".",
         "run",
         "python",
         "mcp/__main__.py",

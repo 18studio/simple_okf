@@ -1,104 +1,30 @@
 #!/usr/bin/env python3
-"""Export canonical Markdown documents into OKF Source Document concepts.
-
-This script is intentionally conservative: it writes derived concepts under
-`<bundle>/documents/` and does not delete existing files.
-"""
+"""Export canonical Markdown documents into OKF Source Document concepts."""
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
+# Allow running this file directly from the repository checkout.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-def slugify(value: str) -> str:
-    value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9а-яё]+", "-", value, flags=re.IGNORECASE)
-    value = value.strip("-")
-    return value or "document"
-
-
-def first_heading(text: str, fallback: str) -> str:
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            return stripped.lstrip("#").strip() or fallback
-    return fallback
-
-
-def iter_source_docs(source: Path) -> Iterable[Path]:
-    for path in sorted(source.rglob("*.md")):
-        if any(part.startswith(".") for part in path.relative_to(source).parts):
-            continue
-        yield path
-
-
-def yaml_scalar(value: str) -> str:
-    escaped = value.replace('"', '\\"')
-    return f'"{escaped}"'
-
-
-def render_concept(source_root: Path, source_file: Path, project_root: Path) -> str:
-    text = source_file.read_text(encoding="utf-8")
-    rel_source = source_file.relative_to(project_root).as_posix()
-    title = first_heading(text, source_file.stem.replace("_", " ").replace("-", " ").title())
-    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-    return f"""---
-type: Source Document
-title: {yaml_scalar(title)}
-description: {yaml_scalar('Canonical source document exported to OKF.')}
-resource: {rel_source}
-tags: [source-document]
-timestamp: {timestamp}
-source_path: {rel_source}
-owner_document: {source_file.name}
----
-
-# Overview
-
-This concept represents the canonical source document `{rel_source}`.
-
-# Source
-
-Canonical source: [{rel_source}](../../../{rel_source})
-
-# Extracted body
-
-{text.rstrip()}
-"""
+from mcp.okf import OKFBundle, OKFError  # noqa: E402
 
 
 def export(source: Path, out: Path, force: bool) -> int:
-    project_root = Path.cwd().resolve()
-    source = source.resolve()
-    out = out.resolve()
-    documents = out / "documents"
-    documents.mkdir(parents=True, exist_ok=True)
-
-    if not source.exists() or not source.is_dir():
-        print(f"ERROR: source directory does not exist: {source}", file=sys.stderr)
+    try:
+        result = OKFBundle(out).export_source_documents(source, force=force, project_root=Path.cwd())
+    except OKFError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    written = 0
-    skipped = 0
-    for source_file in iter_source_docs(source):
-        rel = source_file.relative_to(source)
-        stem = slugify(rel.with_suffix("").as_posix())
-        target = documents / f"{stem}.md"
-        if target.exists() and not force:
-            skipped += 1
-            continue
-        target.write_text(render_concept(source, source_file, project_root), encoding="utf-8")
-        written += 1
-
-    print(f"Exported {written} document concept(s) to {documents}")
-    if skipped:
-        print(f"Skipped {skipped} existing file(s). Use --force to overwrite.")
+    print(f"Exported {result['written_count']} document concept(s) to {Path(result['bundle']) / 'documents'}")
+    if result["skipped_count"]:
+        print(f"Skipped {result['skipped_count']} existing file(s). Use --force to overwrite.")
     return 0
 
 

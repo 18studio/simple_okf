@@ -14,11 +14,14 @@ dependencies = [
 ]
 
 [project.scripts]
-okf-mcp = "okf_mcp.__main__:main"
-okf-validate = "okf_mcp.scripts.validate_okf:main"
-okf-generate-indexes = "okf_mcp.scripts.generate_okf_indexes:main"
-okf-export = "okf_mcp.scripts.export_okf:main"
-okf-generate-graph = "okf_mcp.scripts.generate_okf_graph:main"
+okf-mcp = "mcp.__main__:main"
+okf-validate = "mcp.scripts.validate_okf:main"
+okf-generate-indexes = "mcp.scripts.generate_okf_indexes:main"
+okf-export = "mcp.scripts.export_okf:main"
+okf-generate-graph = "mcp.scripts.generate_okf_graph:main"
+okf-rag-inspect = "mcp.scripts.inspect_rag_corpus:main"
+okf-rag-refresh = "mcp.scripts.refresh_rag_index:main"
+okf-rag-retrieve = "mcp.scripts.rag_retrieve:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/okf_mcp"]
+packages = ["mcp"]
