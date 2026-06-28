@@ -14,7 +14,16 @@ if __package__:
 else:  # Allows running this file directly.
     import sys
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    project_root = Path(__file__).resolve().parents[1]
+    project_root_text = str(project_root)
+    sys.path = [entry for entry in sys.path if entry != project_root_text]
+    sys.path.insert(0, project_root_text)
+
+    existing_mcp = sys.modules.get("mcp")
+    local_init = project_root / "mcp" / "__init__.py"
+    if existing_mcp is not None and Path(getattr(existing_mcp, "__file__", "")).resolve() != local_init:
+        del sys.modules["mcp"]
+
     from mcp import __version__
     from mcp.okf import OKFBundle
     from mcp.rag import LocalOKFRetriever, OKFRagCorpus, load_settings
