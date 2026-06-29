@@ -8,9 +8,9 @@ from collections import Counter
 from pathlib import Path
 from urllib.parse import unquote
 
-from mcp.okf import OKFBundle, OKFDocument
-from mcp.rag.corpus import OKFRagCorpus
-from mcp.rag.models import OKFChunkingReport, OKFChunkingResult, OKFChunkRecord
+from okf_mcp.okf import OKFBundle, OKFDocument
+from okf_mcp.rag.corpus import OKFRagCorpus
+from okf_mcp.rag.models import OKFChunkingReport, OKFChunkingResult, OKFChunkRecord
 
 _LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")

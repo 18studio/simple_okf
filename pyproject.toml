@@ -14,16 +14,16 @@ dependencies = [
 ]
 
 [project.scripts]
-okf = "simple_okf_mcp.cli:main"
-okf-mcp = "simple_okf_mcp.cli:server_main"
-okf-validate = "simple_okf_mcp.cli:validate_main"
-okf-generate-indexes = "simple_okf_mcp.cli:indexes_main"
-okf-export = "simple_okf_mcp.cli:export_main"
-okf-generate-graph = "simple_okf_mcp.cli:graph_main"
-okf-rag-inspect = "simple_okf_mcp.cli:rag_inspect_main"
-okf-rag-refresh = "simple_okf_mcp.cli:rag_refresh_main"
-okf-rag-retrieve = "simple_okf_mcp.cli:rag_retrieve_main"
-okf-7d = "simple_okf_mcp.cli:seven_d_main"
+okf = "okf_mcp.cli:main"
+okf-mcp = "okf_mcp.cli:server_main"
+okf-validate = "okf_mcp.cli:validate_main"
+okf-generate-indexes = "okf_mcp.cli:indexes_main"
+okf-export = "okf_mcp.cli:export_main"
+okf-generate-graph = "okf_mcp.cli:graph_main"
+okf-rag-inspect = "okf_mcp.cli:rag_inspect_main"
+okf-rag-refresh = "okf_mcp.cli:rag_refresh_main"
+okf-rag-retrieve = "okf_mcp.cli:rag_retrieve_main"
+okf-7d = "okf_mcp.cli:seven_d_main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["mcp", "simple_okf_mcp"]
+packages = ["okf_mcp"]

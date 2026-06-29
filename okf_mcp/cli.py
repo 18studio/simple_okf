@@ -1,55 +1,24 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import sys
 from collections import defaultdict
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Callable, Sequence
 from uuid import uuid4
 
 from .okf import OKFBundle, OKFError
 from .rag import LocalOKFRetriever, OKFRagCorpus, RagConfigError, load_settings
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
-_LOCAL_SERVER_PATH = Path(__file__).resolve().with_name("server.py")
-_LOCAL_SERVER_MODULE = "mcp._okf_server"
-
-
-def _load_local_server_module() -> ModuleType:
-    """Load this repository's FastMCP server without shadowing the MCP SDK."""
-
-    project_root_text = str(PROJECT_ROOT)
-    sys.path = [entry for entry in sys.path if entry != project_root_text]
-    sys.path.insert(0, project_root_text)
-
-    existing_mcp = sys.modules.get("mcp")
-    local_init = PROJECT_ROOT / "mcp" / "__init__.py"
-    if existing_mcp is not None and Path(getattr(existing_mcp, "__file__", "")).resolve() != local_init:
-        del sys.modules["mcp"]
-
-    # Import the local package first so mcp/__init__.py can bridge to the SDK.
-    import mcp  # noqa: F401
-
-    existing = sys.modules.get(_LOCAL_SERVER_MODULE)
-    if existing is not None:
-        return existing
-
-    spec = importlib.util.spec_from_file_location(_LOCAL_SERVER_MODULE, _LOCAL_SERVER_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Cannot load local MCP server module from {_LOCAL_SERVER_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[_LOCAL_SERVER_MODULE] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def _load_create_mcp() -> Callable[..., object]:
-    return _load_local_server_module().create_mcp
+    from .server import create_mcp
+
+    return create_mcp
 
 
 def _json_dump(payload: Any, *, pretty: bool = False) -> None:
@@ -414,18 +383,18 @@ def build_parser() -> argparse.ArgumentParser:
     rag = sub.add_parser("rag", help="Inspect, refresh, and query the local OKF RAG index")
     rag_sub = rag.add_subparsers(dest="rag_command", required=True)
     rag_inspect_parser = rag_sub.add_parser("inspect", help="Inspect OKF RAG corpus")
-    rag_inspect_parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    rag_inspect_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     rag_inspect_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     rag_inspect_parser.set_defaults(handler=lambda args: rag_inspect(env=args.env, pretty=args.pretty))
 
     rag_refresh_parser = rag_sub.add_parser("refresh", help="Refresh local OKF RAG index")
-    rag_refresh_parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    rag_refresh_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     rag_refresh_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     rag_refresh_parser.set_defaults(handler=lambda args: rag_refresh(env=args.env, pretty=args.pretty))
 
     rag_retrieve_parser = rag_sub.add_parser("retrieve", help="Retrieve OKF RAG chunks")
     rag_retrieve_parser.add_argument("query")
-    rag_retrieve_parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    rag_retrieve_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     rag_retrieve_parser.add_argument("--limit", type=int, default=None)
     rag_retrieve_parser.add_argument("--type-filter", default=None)
     rag_retrieve_parser.add_argument("--tag", default=None)
@@ -462,11 +431,11 @@ def _run_server(args: argparse.Namespace) -> int:
 def main(
     argv: Sequence[str] | None = None,
     *,
-    multi_app_help_for_options: bool = False,
+    multi_app_help_for_options: bool = True,
 ) -> int:
     args_list = list(sys.argv[1:] if argv is None else argv)
-    # Backward compatibility for the old `python -m mcp --bundle okf` server CLI.
-    # Console `okf --help` opts into multi-app help via the bootstrap wrapper.
+    # Backward compatibility for the old `python -m okf_mcp --bundle okf` server CLI.
+    # Console `okf --help` opts into multi-app help.
     if not args_list or (args_list[0].startswith("-") and not (multi_app_help_for_options and args_list[0] in {"-h", "--help"})):
         return server_main(args_list)
     parser = build_parser()
@@ -519,7 +488,7 @@ def graph_main(argv: Sequence[str] | None = None) -> int:
 
 def rag_inspect_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Inspect OKF RAG corpus")
-    parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     args = parser.parse_args(argv)
     return rag_inspect(env=args.env, pretty=args.pretty)
@@ -527,7 +496,7 @@ def rag_inspect_main(argv: Sequence[str] | None = None) -> int:
 
 def rag_refresh_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh local OKF RAG index")
-    parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     args = parser.parse_args(argv)
     return rag_refresh(env=args.env, pretty=args.pretty)
@@ -536,7 +505,7 @@ def rag_refresh_main(argv: Sequence[str] | None = None) -> int:
 def rag_retrieve_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Retrieve OKF RAG chunks")
     parser.add_argument("query")
-    parser.add_argument("--env", default=None, help="Path to mcp/rag/.env file")
+    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--type-filter", default=None)
     parser.add_argument("--tag", default=None)

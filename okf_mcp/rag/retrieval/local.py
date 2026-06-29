@@ -8,9 +8,9 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
-from mcp.okf import OKFBundle
-from mcp.rag.ingestion import OKFConceptParser
-from mcp.rag.models import OKFChunkRecord, OKFRetrievalHit
+from okf_mcp.okf import OKFBundle
+from okf_mcp.rag.ingestion import OKFConceptParser
+from okf_mcp.rag.models import OKFChunkRecord, OKFRetrievalHit
 
 _TOKEN_RE = re.compile(r"[\wА-Яа-яЁё-]+", re.UNICODE)
 

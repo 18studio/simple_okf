@@ -1,6 +1,6 @@
 """Configuration for OKF RAG tools.
 
-The real local environment is intentionally loaded from `mcp/rag/.env`.
+The real local environment is intentionally loaded from `okf_mcp/rag/.env`.
 Secrets are never stored in this package.
 """
 
@@ -29,7 +29,7 @@ def project_root() -> Path:
 
 
 def default_env_file() -> Path:
-    return project_root() / "mcp" / "rag" / ".env"
+    return project_root() / "okf_mcp" / "rag" / ".env"
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -63,8 +63,8 @@ def _path_from_env(root: Path, values: dict[str, str], key: str, default: str) -
 _LEGACY_RAG_ARTIFACT_DIRS = {
     "rag/artifacts",
     "./rag/artifacts",
-    "mcp/rag/artifacts",
-    "./mcp/rag/artifacts",
+    "okf_mcp/rag/artifacts",
+    "./okf_mcp/rag/artifacts",
     "artifacts",
     "./artifacts",
 }
@@ -112,7 +112,7 @@ def load_settings(env_file: Path | None = None) -> RagSettings:
     if not selected_env.exists():
         display = selected_env.relative_to(root) if selected_env.is_relative_to(root) else selected_env
         raise RagConfigError(
-            f"RAG env file not found: {display}. Create it from mcp/rag/.env.example."
+            f"RAG env file not found: {display}. Create it from okf_mcp/rag/.env.example."
         )
     values = _parse_env_file(selected_env)
     bundle_dir = _path_from_env(root, values, "RAG_BUNDLE_DIR", "okf")

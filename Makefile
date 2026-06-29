@@ -2,7 +2,7 @@ PY ?= python3
 UV ?= uv
 BUNDLE ?= okf
 ARTIFACTS_DIR ?= artifacts
-RAG_ENV ?= mcp/rag/.env
+RAG_ENV ?= okf_mcp/rag/.env
 RAG_QUERY ?= okf
 
 OKF_DIRS := \
@@ -37,41 +37,41 @@ help:
 init:
 	@command -v $(UV) >/dev/null || { echo "ERROR: uv is required"; exit 2; }
 	$(UV) sync
-	@test -f $(RAG_ENV) || cp mcp/rag/.env.example $(RAG_ENV)
+	@test -f $(RAG_ENV) || cp okf_mcp/rag/.env.example $(RAG_ENV)
 	@mkdir -p $(ARTIFACTS_DIR)/rag
 	$(MAKE) rag-check
 
 validate:
-	$(PY) -m py_compile mcp/*.py simple_okf_mcp/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
-	$(PY) -m mcp validate $(BUNDLE)
+	$(PY) -m py_compile okf_mcp/*.py okf_mcp/rag/*.py okf_mcp/rag/ingestion/*.py okf_mcp/rag/retrieval/*.py
+	$(PY) -m okf_mcp validate $(BUNDLE)
 
 rag-check: validate
-	@$(PY) -m mcp rag inspect | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG corpus: {} concepts, {} bytes -> {}".format(d["concept_count"], d["total_bytes"], d["artifacts_dir"]))'
-	@$(PY) -m mcp rag refresh | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG index: {} chunks -> {}".format(d["chunk_count"], d["path"]))'
-	@$(PY) -m mcp rag retrieve "$(RAG_QUERY)" --limit 3 | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG retrieve: {} hit(s) for {!r}".format(len(d["hits"]), d["query"]))'
+	@$(PY) -m okf_mcp rag inspect | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG corpus: {} concepts, {} bytes -> {}".format(d["concept_count"], d["total_bytes"], d["artifacts_dir"]))'
+	@$(PY) -m okf_mcp rag refresh | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG index: {} chunks -> {}".format(d["chunk_count"], d["path"]))'
+	@$(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --limit 3 | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG retrieve: {} hit(s) for {!r}".format(len(d["hits"]), d["query"]))'
 
 indexes:
-	$(PY) -m mcp indexes $(BUNDLE)
+	$(PY) -m okf_mcp indexes $(BUNDLE)
 
 graph:
-	$(PY) -m mcp graph $(BUNDLE) --out $(ARTIFACTS_DIR)/okf/graph.json --html-out $(ARTIFACTS_DIR)/okf/graph.html
+	$(PY) -m okf_mcp graph $(BUNDLE) --out $(ARTIFACTS_DIR)/okf/graph.json --html-out $(ARTIFACTS_DIR)/okf/graph.html
 
 7d-report:
-	$(PY) -m mcp 7d report --bundle $(BUNDLE)
+	$(PY) -m okf_mcp 7d report --bundle $(BUNDLE)
 
 7d-dashboard:
-	$(PY) -m mcp 7d dashboard --bundle $(BUNDLE) --out $(ARTIFACTS_DIR)/7d-dashboard.html
+	$(PY) -m okf_mcp 7d dashboard --bundle $(BUNDLE) --out $(ARTIFACTS_DIR)/7d-dashboard.html
 
 7d-validate:
-	$(PY) -m mcp 7d validate --bundle $(BUNDLE)
+	$(PY) -m okf_mcp 7d validate --bundle $(BUNDLE)
 
 guard-artifacts-dir:
 	@test "$(abspath $(ARTIFACTS_DIR))" = "$(abspath artifacts)" || { echo "ERROR: clean targets only support repository artifacts/; got ARTIFACTS_DIR=$(ARTIFACTS_DIR)"; exit 2; }
 
 clean-artifacts: guard-artifacts-dir
 	@rm -rf $(ARTIFACTS_DIR) .pytest_cache .mypy_cache .ruff_cache
-	@find mcp -type d -name __pycache__ -prune -exec rm -rf {} +
-	@find mcp -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+	@find okf_mcp -type d -name __pycache__ -prune -exec rm -rf {} +
+	@find okf_mcp -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 	@echo "Generated artifacts removed."
 
 clean-project reset-empty: guard-artifacts-dir
@@ -81,5 +81,5 @@ clean-project reset-empty: guard-artifacts-dir
 	@rm -rf $(ARTIFACTS_DIR)
 	@test -f $(BUNDLE)/log.md || printf '# Log\n\n' > $(BUNDLE)/log.md
 	$(MAKE) indexes
-	$(PY) -m mcp validate $(BUNDLE)
+	$(PY) -m okf_mcp validate $(BUNDLE)
 	@echo "Project reset to an empty OKF bundle skeleton."

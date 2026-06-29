@@ -27,13 +27,13 @@ This repository is standardized on:
 
 ```text
 okf/                    # default OKF bundle
-mcp/                    # MCP server, OKF library, CLI fallback, OKF RAG
-mcp/rag/.env            # local-only RAG environment file, never commit
+okf_mcp/                    # MCP server, OKF library, CLI fallback, OKF RAG
+okf_mcp/rag/.env            # local-only RAG environment file, never commit
 artifacts/              # generated graph, 7D dashboard, and RAG artifacts
 .agents/skills/okf/     # this skill, templates, references
 ```
 
-Do not reintroduce `src/okf_mcp/` or a top-level `rag/` directory.
+Do not create alternate local tooling packages or a top-level `rag/` directory.
 
 ## Authority and source of truth
 
@@ -43,9 +43,9 @@ For this project:
 2. `SPEC.md` is the repository/tooling contract.
 3. `AGENTS.md` is the repository-local agent policy.
 4. `okf/` is the default knowledge bundle.
-5. `mcp/okf.py` is the shared OKF filesystem implementation.
-6. `mcp/server.py` is the MCP tool surface.
-7. `mcp/rag/` is tooling over OKF concepts, not canonical knowledge.
+5. `okf_mcp/okf.py` is the shared OKF filesystem implementation.
+6. `okf_mcp/server.py` is the MCP tool surface.
+7. `okf_mcp/rag/` is tooling over OKF concepts, not canonical knowledge.
 
 When files disagree, update the canonical owner instead of duplicating the same
 rule in another file.
@@ -58,7 +58,7 @@ Primary MCP server name:
 simple-okf
 ```
 
-`simple-okf` is configured in `.mcp.json` and runs `python -m mcp server`
+`simple-okf` is configured in `.mcp.json` and runs `python -m okf_mcp server`
 against the `okf/` bundle.
 
 Preferred MCP tools for OKF work:
@@ -97,21 +97,21 @@ repository/tooling or explicitly accepts fallback behavior.
 
 ## CLI fallback
 
-CLI fallback commands live in the `mcp` multi-app CLI and call shared implementation code.
+CLI fallback commands live in the `okf_mcp` multi-app CLI and call shared implementation code.
 Do not duplicate OKF logic in CLI handlers.
 
 ```sh
-python3 -m mcp validate okf
-python3 -m mcp indexes okf
-python3 -m mcp export system --out okf
-python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
-python3 -m mcp rag inspect --pretty
-python3 -m mcp rag refresh --pretty
-python3 -m mcp rag retrieve "query" --pretty
-python3 -m mcp rag retrieve "query" --answer --pretty
+python3 -m okf_mcp validate okf
+python3 -m okf_mcp indexes okf
+python3 -m okf_mcp export system --out okf
+python3 -m okf_mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m okf_mcp rag inspect --pretty
+python3 -m okf_mcp rag refresh --pretty
+python3 -m okf_mcp rag retrieve "query" --pretty
+python3 -m okf_mcp rag retrieve "query" --answer --pretty
 ```
 
-RAG fallback reads environment from `mcp/rag/.env` by default. If the file is
+RAG fallback reads environment from `okf_mcp/rag/.env` by default. If the file is
 missing, use `--env /path/to/file` for smoke tests or report that RAG runtime
 validation was skipped.
 
@@ -295,8 +295,8 @@ replacement for reading/editing source concepts.
 RAG configuration:
 
 ```text
-mcp/rag/.env              # local-only, ignored
-mcp/rag/.env.example      # committed template
+okf_mcp/rag/.env              # local-only, ignored
+okf_mcp/rag/.env.example      # committed template
 artifacts/rag/            # generated RAG artifacts
 ```
 
@@ -316,7 +316,7 @@ RAG rules:
 3. RAG answers must cite `concept_id`, path, and line ranges when evidence is
    available.
 4. RAG artifacts are derived outputs, not canonical knowledge.
-5. Never commit `mcp/rag/.env`.
+5. Never commit `okf_mcp/rag/.env`.
 
 ## Validation expectations
 
@@ -337,9 +337,9 @@ simple-okf.validate_bundle()
 For repository/tooling changes, use local checks as appropriate:
 
 ```sh
-python3 -m py_compile mcp/*.py simple_okf_mcp/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
-python3 -m mcp validate okf
-python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m py_compile okf_mcp/*.py okf_mcp/rag/*.py okf_mcp/rag/ingestion/*.py okf_mcp/rag/retrieval/*.py
+python3 -m okf_mcp validate okf
+python3 -m okf_mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
 git diff --check
 git status --short
 git diff --stat
@@ -355,8 +355,8 @@ Report which MCP tools or fallback commands were run and their results.
 4. Prefer minimal accurate concepts over padded concepts.
 5. Do not impose a rigid taxonomy beyond project conventions.
 6. Ask before broad directory, ownership, or bundle-structure changes.
-7. Do not commit local secrets or `mcp/rag/.env`.
-8. Do not create top-level `rag/` or `src/okf_mcp/`.
+7. Do not commit local secrets or `okf_mcp/rag/.env`.
+8. Do not create alternate local tooling packages or top-level `rag/` directories.
 9. Treat graph and RAG artifacts as derived outputs.
 10. Report unresolved missing knowledge as gaps or open questions.
 

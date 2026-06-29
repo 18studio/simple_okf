@@ -14,7 +14,7 @@ The template is intentionally limited to:
 - Markdown links as a graph;
 - a FastMCP server for agent access to the bundle;
 - a local OKF-aware RAG layer over concepts;
-- a multi-app CLI in the MCP package, plus console commands through a non-conflicting bootstrap, as fallback tools;
+- a multi-app CLI and console commands in the `okf_mcp` package as fallback tools;
 - a project skill for agents.
 
 The template establishes the local filesystem contract for OKF and does not require external services to read or validate the bundle.
@@ -207,26 +207,25 @@ Project skills store only agent instructions, templates, and references:
 Executable helper commands belong to the MCP package multi-app CLI:
 
 ```text
-mcp/__main__.py
-mcp/cli.py
+okf_mcp/__main__.py
+okf_mcp/cli.py
 ```
 
-The canonical CLI implementation is `mcp/cli.py`. Installable console scripts
-enter through `simple_okf_mcp/cli.py`, a small bootstrap package that avoids the
-upstream MCP SDK `mcp` namespace collision and delegates to `mcp/cli.py`.
+The canonical CLI implementation is `okf_mcp/cli.py`. Installable console scripts
+enter directly through `okf_mcp.cli:*` entrypoints.
 
 ### 8. OKF-aware RAG
 
 The local RAG layer uses OKF concepts as its corpus. The runtime environment is loaded from this file:
 
 ```text
-mcp/rag/.env
+okf_mcp/rag/.env
 ```
 
-The `mcp/rag/.env` file must not be committed. An example is stored in:
+The `okf_mcp/rag/.env` file must not be committed. An example is stored in:
 
 ```text
-mcp/rag/.env.example
+okf_mcp/rag/.env.example
 ```
 
 Minimum variables:
@@ -250,7 +249,7 @@ The RAG parser must:
 The MCP server is located here:
 
 ```text
-mcp/
+okf_mcp/
 ```
 
 The server provides tools for reading, searching, writing, and validating the OKF bundle:
@@ -300,26 +299,26 @@ okf://bundle/graph
 The primary agent-facing contract is MCP:
 
 ```text
-python3 -m mcp validate          -> validate_bundle
-python3 -m mcp indexes           -> generate_indexes
-python3 -m mcp export            -> export_source_documents
-python3 -m mcp graph             -> build_graph JSON to stdout by default; use --out/--html-out to write artifacts
-python3 -m mcp 7d ...            -> seven_d_stage_report / seven_d_dashboard / validate_7d / seven_d_feature_status
-python3 -m mcp rag ...           -> local OKF RAG inspect / refresh / retrieve
+python3 -m okf_mcp validate          -> validate_bundle
+python3 -m okf_mcp indexes           -> generate_indexes
+python3 -m okf_mcp export            -> export_source_documents
+python3 -m okf_mcp graph             -> build_graph JSON to stdout by default; use --out/--html-out to write artifacts
+python3 -m okf_mcp 7d ...            -> seven_d_stage_report / seven_d_dashboard / validate_7d / seven_d_feature_status
+python3 -m okf_mcp rag ...           -> local OKF RAG inspect / refresh / retrieve
 ```
 
 Multi-app CLI fallback:
 
 ```bash
-python3 -m mcp validate okf
-python3 -m mcp indexes okf
-python3 -m mcp export system --out okf
-python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
-python3 -m mcp rag inspect --pretty
-python3 -m mcp rag refresh --pretty
-python3 -m mcp rag retrieve "project access" --pretty
-python3 -m mcp 7d report --bundle okf
-python3 -m mcp 7d dashboard --bundle okf --out artifacts/7d-dashboard.html
+python3 -m okf_mcp validate okf
+python3 -m okf_mcp indexes okf
+python3 -m okf_mcp export system --out okf
+python3 -m okf_mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m okf_mcp rag inspect --pretty
+python3 -m okf_mcp rag refresh --pretty
+python3 -m okf_mcp rag retrieve "project access" --pretty
+python3 -m okf_mcp 7d report --bundle okf
+python3 -m okf_mcp 7d dashboard --bundle okf --out artifacts/7d-dashboard.html
 ```
 
 MCP stdio server:

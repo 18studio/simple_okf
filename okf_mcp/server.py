@@ -16,17 +16,12 @@ else:  # Allows running this file directly.
 
     project_root = Path(__file__).resolve().parents[1]
     project_root_text = str(project_root)
-    sys.path = [entry for entry in sys.path if entry != project_root_text]
-    sys.path.insert(0, project_root_text)
+    if project_root_text not in sys.path:
+        sys.path.insert(0, project_root_text)
 
-    existing_mcp = sys.modules.get("mcp")
-    local_init = project_root / "mcp" / "__init__.py"
-    if existing_mcp is not None and Path(getattr(existing_mcp, "__file__", "")).resolve() != local_init:
-        del sys.modules["mcp"]
-
-    from mcp import __version__
-    from mcp.okf import OKFBundle
-    from mcp.rag import LocalOKFRetriever, OKFRagCorpus, load_settings
+    from okf_mcp import __version__
+    from okf_mcp.okf import OKFBundle
+    from okf_mcp.rag import LocalOKFRetriever, OKFRagCorpus, load_settings
 
 DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
 
@@ -269,9 +264,9 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
 
     @mcp.tool
     def rag_inspect_corpus(correlation_id: str | None = None) -> dict[str, Any]:
-        """Inspect the OKF RAG corpus configured in `mcp/rag/.env`.
+        """Inspect the OKF RAG corpus configured in `okf_mcp/rag/.env`.
 
-        This local tool reads `RAG_BUNDLE_DIR` from `mcp/rag/.env` and treats OKF
+        This local tool reads `RAG_BUNDLE_DIR` from `okf_mcp/rag/.env` and treats OKF
         concepts as documents. Support files (`index.md`, `log.md`) are not
         included.
         """

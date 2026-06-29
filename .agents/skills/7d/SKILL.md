@@ -12,7 +12,7 @@ Use this skill for 7D lifecycle work in this repository.
 
 7D is a process registry over existing OKF concept types. It does **not** change
 OKF concept format. The canonical rules are in `SPEC.md`, `AGENTS.md`, and the
-7D registry implemented by `mcp/okf.py`.
+7D registry implemented by `okf_mcp/okf.py`.
 
 ## Core rules
 
@@ -69,38 +69,38 @@ package multi-app CLI. Resolve paths from the repository root.
 Generate a compact report for every 7D stage:
 
 ```sh
-python3 -m mcp 7d report --bundle okf
-python3 -m mcp 7d report --bundle okf --stage Design
+python3 -m okf_mcp 7d report --bundle okf
+python3 -m okf_mcp 7d report --bundle okf --stage Design
 ```
 
 Generate the interactive Kanban dashboard HTML:
 
 ```sh
-python3 -m mcp 7d dashboard --bundle okf --out artifacts/7d-dashboard.html
+python3 -m okf_mcp 7d dashboard --bundle okf --out artifacts/7d-dashboard.html
 ```
 
 Return the same report as JSON:
 
 ```sh
-python3 -m mcp 7d report --bundle okf --json
+python3 -m okf_mcp 7d report --bundle okf --json
 ```
 
 Validate 7D usage:
 
 ```sh
-python3 -m mcp 7d validate --bundle okf
+python3 -m okf_mcp 7d validate --bundle okf
 ```
 
 Show one feature's derived 7D status:
 
 ```sh
-python3 -m mcp 7d status --bundle okf requirements/flows/first-reasoning-onboarding
+python3 -m okf_mcp 7d status --bundle okf requirements/flows/first-reasoning-onboarding
 ```
 
 Show the registry:
 
 ```sh
-python3 -m mcp 7d registry --bundle okf
+python3 -m okf_mcp 7d registry --bundle okf
 ```
 
 ## Stage report expectations

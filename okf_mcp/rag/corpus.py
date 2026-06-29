@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from mcp.okf import OKFBundle, OKFDocument
-from mcp.rag.models import OKFConceptDocument, OKFCorpusInventory
+from okf_mcp.okf import OKFBundle, OKFDocument
+from okf_mcp.rag.models import OKFConceptDocument, OKFCorpusInventory
 
 
 def _sha256_bytes(content: bytes) -> str:
