@@ -13,7 +13,8 @@ Documentation and implementation authority is layered:
 4. `mcp/` is the canonical Python package for OKF MCP tools, CLI fallback tools,
    and OKF-aware RAG helpers.
 5. `.agents/skills/okf/SKILL.md` defines OKF-specific agent workflow rules.
-6. `AGENTS.md` defines repository-local working rules for coding agents.
+6. `.agents/skills/7d/SKILL.md` defines 7D lifecycle workflow rules over OKF.
+7. `AGENTS.md` defines repository-local working rules for coding agents.
 
 When these files disagree, update the canonical owner instead of duplicating the
 same rule in a secondary location.
@@ -21,14 +22,18 @@ same rule in a secondary location.
 ## Repository Boundaries
 
 - Keep the primary OKF bundle under `okf/`.
-- Keep MCP server, OKF helpers, CLI scripts, and RAG implementation under `mcp/`.
+- Keep the MCP server, multi-app CLI, OKF helpers, and RAG implementation under `mcp/`.
 - Do not reintroduce `src/okf_mcp/`; this project is standardized on `mcp/`.
 - Keep OKF agent instructions, templates, and references under
   `.agents/skills/okf/`.
-- Keep local RAG configuration examples and artifacts under `mcp/rag/`.
+- Keep 7D lifecycle agent instructions under `.agents/skills/7d/`.
+- Keep canonical CLI app implementation in `mcp/cli.py` and reusable implementation in `mcp/` modules.
+- Keep installable console-script bootstrapping in `simple_okf_mcp/cli.py` so console commands avoid the upstream MCP SDK `mcp` namespace collision while delegating to `mcp/cli.py`.
+- Keep local RAG configuration examples under `mcp/rag/`.
 - Do not create a top-level `rag/` directory for this project.
-- Treat generated files such as `okf/graph.json`, `okf/graph.html`, and
-  `mcp/rag/artifacts/*` as derived outputs unless explicitly promoted.
+- Keep generated artifacts under repository `artifacts/`, including
+  `artifacts/okf/graph.json`, `artifacts/okf/graph.html`,
+  `artifacts/7d-dashboard.html`, and `artifacts/rag/*`.
 - Never commit local secrets. `mcp/rag/.env` is local-only and ignored.
 
 ## OKF Bundle Rules
@@ -68,8 +73,9 @@ OKF concept format.
   the MCP 7D tools, not from per-concept 7D metadata.
 - Derive a feature's 7D progress from linked artifact concepts and their types;
   if the type is not in the registry, report a gap.
-- Keep 7D behavior out of `.agents/skills/okf/SKILL.md`; this file and
-  `SPEC.md` are the repository-level sources for 7D working rules.
+- Keep 7D behavior out of `.agents/skills/okf/SKILL.md`; use the dedicated
+  `.agents/skills/7d/SKILL.md` workflow for 7D operations while keeping
+  `SPEC.md` as the repository-level source for 7D rules.
 
 ## OKF Workflows
 
@@ -86,14 +92,17 @@ validate_bundle
 seven_d_registry
 seven_d_mapping_for_type
 list_7d_artifact_concepts
+seven_d_stage_report
+seven_d_stage_report_markdown
+seven_d_dashboard
 seven_d_feature_status
 validate_7d
 generate_indexes
 build_graph
 ```
 
-If MCP is unavailable, use the local CLI fallback scripts in `mcp/scripts/` and
-report that fallback was used.
+If MCP is unavailable, use the local multi-app CLI (`python3 -m mcp ...`) and
+report that CLI fallback was used.
 
 Before broad OKF changes:
 
@@ -111,7 +120,7 @@ not define canonical knowledge by itself.
 
 - The local RAG environment file is `mcp/rag/.env`.
 - The committed example is `mcp/rag/.env.example`.
-- Default artifacts belong under `mcp/rag/artifacts/`.
+- Default RAG artifacts belong under `artifacts/rag/`.
 - RAG tools must treat OKF concepts as the corpus and exclude `index.md` and
   `log.md`.
 - RAG parser output must preserve `concept_id`, `type`, `title`, `description`,
@@ -123,10 +132,10 @@ not define canonical knowledge by itself.
 Useful CLI commands:
 
 ```sh
-python3 mcp/scripts/inspect_rag_corpus.py --pretty
-python3 mcp/scripts/refresh_rag_index.py --pretty
-python3 mcp/scripts/rag_retrieve.py "query" --pretty
-python3 mcp/scripts/rag_retrieve.py "query" --answer --pretty
+python3 -m mcp rag inspect --pretty
+python3 -m mcp rag refresh --pretty
+python3 -m mcp rag retrieve "query" --pretty
+python3 -m mcp rag retrieve "query" --answer --pretty
 ```
 
 ## Code Ownership
@@ -135,14 +144,15 @@ python3 mcp/scripts/rag_retrieve.py "query" --answer --pretty
 |---|---|
 | OKF filesystem model, parser, validator, graph generation | `mcp/okf.py` |
 | FastMCP tool surface | `mcp/server.py` |
-| MCP entrypoint | `mcp/__main__.py` |
-| CLI fallback scripts | `mcp/scripts/` |
+| MCP multi-app entrypoint | `mcp/__main__.py`, `mcp/cli.py` |
+| Console-script bootstrap | `simple_okf_mcp/cli.py` delegates to `mcp/cli.py` while avoiding the upstream MCP SDK `mcp` namespace collision |
 | OKF-aware local RAG | `mcp/rag/` |
 | Default knowledge bundle | `okf/` |
 | Agent OKF skill and templates | `.agents/skills/okf/` |
-| Packaging and console scripts | `pyproject.toml` |
+| Agent 7D workflow skill | `.agents/skills/7d/` |
+| Packaging and console scripts | `pyproject.toml`, `simple_okf_mcp/cli.py` |
 
-Avoid duplicating core OKF logic in scripts. CLI scripts should call shared
+Avoid duplicating core OKF logic in CLI code. CLI commands should call shared
 library code from `mcp/okf.py` or `mcp/rag/`.
 
 ## Change Classification
@@ -151,12 +161,13 @@ Before editing, classify the request:
 
 - **OKF content change**: creates, edits, moves, or deletes concepts in `okf/`.
   Follow OKF workflows, regenerate indexes/graph when needed, and validate.
-- **OKF tooling change**: changes `mcp/okf.py`, MCP tools, CLI scripts, or
-  package configuration. Run Python compile checks and relevant CLI smoke tests.
-- **RAG tooling change**: changes `mcp/rag/` or RAG scripts. Test with an env
+- **OKF tooling change**: changes `mcp/okf.py`, MCP tools, `mcp/cli.py`,
+  `simple_okf_mcp/`, or package configuration. Run Python compile checks and
+  relevant CLI smoke tests.
+- **RAG tooling change**: changes `mcp/rag/` or RAG CLI behavior. Test with an env
   file and ensure `mcp/rag/.env` remains uncommitted.
-- **Agent instruction change**: changes `AGENTS.md` or `.agents/skills/okf/`.
-  Keep rules consistent with `README.md` and `SPEC.md`.
+- **Agent instruction change**: changes `AGENTS.md`, `.agents/skills/okf/`, or
+  `.agents/skills/7d/`. Keep rules consistent with `README.md` and `SPEC.md`.
 - **Generated-output change**: updates graph/index/artifact files. Ensure the
   generating command is clear and repeatable.
 
@@ -179,9 +190,9 @@ Linking rules:
 Before completing repository changes, run the relevant subset:
 
 ```sh
-python3 -m py_compile mcp/__init__.py mcp/__main__.py mcp/okf.py mcp/server.py mcp/scripts/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
-python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
+python3 -m py_compile mcp/*.py simple_okf_mcp/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
+python3 -m mcp validate okf
+python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
 git diff --check
 git status --short
 git diff --stat
@@ -194,9 +205,9 @@ validation was skipped because the local env file is absent.
 For OKF content additions/removals/renames, also run:
 
 ```sh
-python3 mcp/scripts/generate_okf_indexes.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
-python3 mcp/scripts/validate_okf.py okf
+python3 -m mcp indexes okf
+python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m mcp validate okf
 ```
 
 ## Reporting

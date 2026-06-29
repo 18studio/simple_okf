@@ -29,7 +29,7 @@ This repository is standardized on:
 okf/                    # default OKF bundle
 mcp/                    # MCP server, OKF library, CLI fallback, OKF RAG
 mcp/rag/.env            # local-only RAG environment file, never commit
-mcp/rag/artifacts/      # local/generated RAG artifacts
+artifacts/              # generated graph, 7D dashboard, and RAG artifacts
 .agents/skills/okf/     # this skill, templates, references
 ```
 
@@ -58,8 +58,8 @@ Primary MCP server name:
 simple-okf
 ```
 
-`simple-okf` is configured in `.mcp.json` and runs `mcp/__main__.py` against the
-`okf/` bundle.
+`simple-okf` is configured in `.mcp.json` and runs `python -m mcp server`
+against the `okf/` bundle.
 
 Preferred MCP tools for OKF work:
 
@@ -76,7 +76,7 @@ simple-okf.write_concept_doc(concept_id, frontmatter, body, ...)
 simple-okf.validate_bundle()
 simple-okf.generate_indexes()
 simple-okf.export_source_documents(source="system", force=false)
-simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
+simple-okf.build_graph(write=true, out_path="artifacts/okf/graph.json", html=true, html_out_path="artifacts/okf/graph.html")
 ```
 
 OKF-aware RAG MCP tools:
@@ -97,18 +97,18 @@ repository/tooling or explicitly accepts fallback behavior.
 
 ## CLI fallback
 
-CLI fallback scripts live in `mcp/scripts/` and call shared implementation code.
-Do not duplicate OKF logic in scripts.
+CLI fallback commands live in the `mcp` multi-app CLI and call shared implementation code.
+Do not duplicate OKF logic in CLI handlers.
 
 ```sh
-python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_indexes.py okf
-python3 mcp/scripts/export_okf.py --source system --out okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
-python3 mcp/scripts/inspect_rag_corpus.py --pretty
-python3 mcp/scripts/refresh_rag_index.py --pretty
-python3 mcp/scripts/rag_retrieve.py "query" --pretty
-python3 mcp/scripts/rag_retrieve.py "query" --answer --pretty
+python3 -m mcp validate okf
+python3 -m mcp indexes okf
+python3 -m mcp export system --out okf
+python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m mcp rag inspect --pretty
+python3 -m mcp rag refresh --pretty
+python3 -m mcp rag retrieve "query" --pretty
+python3 -m mcp rag retrieve "query" --answer --pretty
 ```
 
 RAG fallback reads environment from `mcp/rag/.env` by default. If the file is
@@ -247,8 +247,8 @@ validation. If the correct target is unknown, report the gap.
 6. Add citations only when there is a real source.
 7. Write via `simple-okf.write_concept_doc(...)`.
 8. Run `simple-okf.generate_indexes()`.
-9. Run `simple-okf.build_graph(write=true, out_path="graph.json", html=true,
-   html_out_path="graph.html")` when relationships changed.
+9. Run `simple-okf.build_graph(write=true, out_path="artifacts/okf/graph.json", html=true,
+   html_out_path="artifacts/okf/graph.html")` when relationships changed.
 10. Run `simple-okf.validate_bundle()`.
 
 ## Workflow: edit a concept
@@ -281,10 +281,10 @@ user explicitly changes the ownership model.
 Build graph JSON and optional HTML report from concept links:
 
 ```text
-simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
+simple-okf.build_graph(write=true, out_path="artifacts/okf/graph.json", html=true, html_out_path="artifacts/okf/graph.html")
 ```
 
-`okf/graph.json` and `okf/graph.html` are derived outputs and may be
+`artifacts/okf/graph.json` and `artifacts/okf/graph.html` are derived outputs and may be
 regenerated.
 
 ## Workflow: use OKF RAG
@@ -297,14 +297,14 @@ RAG configuration:
 ```text
 mcp/rag/.env              # local-only, ignored
 mcp/rag/.env.example      # committed template
-mcp/rag/artifacts/        # generated artifacts
+artifacts/rag/            # generated RAG artifacts
 ```
 
 Default useful variables:
 
 ```dotenv
 RAG_BUNDLE_DIR=okf
-RAG_ARTIFACTS_DIR=mcp/rag/artifacts
+RAG_ARTIFACTS_DIR=artifacts/rag
 RAG_RETRIEVAL_RESULT_LIMIT=10
 RAG_ANSWER_EVIDENCE_LIMIT=5
 ```
@@ -330,16 +330,16 @@ When adding/removing/renaming concepts, also run:
 
 ```text
 simple-okf.generate_indexes()
-simple-okf.build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
+simple-okf.build_graph(write=true, out_path="artifacts/okf/graph.json", html=true, html_out_path="artifacts/okf/graph.html")
 simple-okf.validate_bundle()
 ```
 
 For repository/tooling changes, use local checks as appropriate:
 
 ```sh
-python3 -m py_compile mcp/__init__.py mcp/__main__.py mcp/okf.py mcp/server.py mcp/scripts/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
-python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
+python3 -m py_compile mcp/*.py simple_okf_mcp/*.py mcp/rag/*.py mcp/rag/ingestion/*.py mcp/rag/retrieval/*.py
+python3 -m mcp validate okf
+python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
 git diff --check
 git status --short
 git diff --stat

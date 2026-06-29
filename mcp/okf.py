@@ -685,11 +685,50 @@ class OKFBundle:
     def path_to_concept_id(self, path: Path) -> str:
         return path.resolve().relative_to(self.root).with_suffix("").as_posix()
 
+    @property
+    def repository_root(self) -> Path:
+        """Repository root used for generated artifacts."""
+        return self.root.parent
+
+    @property
+    def artifacts_root(self) -> Path:
+        """Root directory for generated outputs outside the OKF bundle."""
+        return self.repository_root / "artifacts"
+
     def _assert_inside(self, path: Path) -> None:
         try:
             path.relative_to(self.root)
         except ValueError as exc:
             raise OKFError(f"Path escapes bundle root: {path}") from exc
+
+    def _assert_inside_artifacts(self, path: Path) -> None:
+        artifact_root = self.artifacts_root.resolve()
+        try:
+            path.relative_to(artifact_root)
+        except ValueError as exc:
+            raise OKFError(f"Generated artifact path escapes artifacts root: {path}") from exc
+
+    def generated_artifact_path(self, out_path: str | Path) -> Path:
+        """Resolve a generated-output path and require it under repository artifacts/."""
+        raw = Path(out_path).expanduser()
+        if raw.is_absolute():
+            out = raw
+        elif raw.parts and raw.parts[0] == self.artifacts_root.name:
+            out = self.repository_root / raw
+        else:
+            # Backward-compatible handling for old bare names such as graph.json:
+            # keep generated outputs outside the bundle, under artifacts/.
+            out = self.artifacts_root / raw
+        out = out.resolve()
+        self._assert_inside_artifacts(out)
+        return out
+
+    def artifact_display_path(self, path: Path) -> str:
+        """Return a stable repository-relative display path when possible."""
+        try:
+            return path.resolve().relative_to(self.repository_root).as_posix()
+        except ValueError:
+            return path.resolve().as_posix()
 
     def iter_markdown(self, *, include_support: bool = True) -> Iterable[Path]:
         self.ensure_exists()
@@ -847,6 +886,397 @@ class OKFBundle:
             )
         )
         return out
+
+    def seven_d_stage_report(self, stage: str | None = None) -> dict[str, Any]:
+        """Generate a structured report grouped by 7D lifecycle stage."""
+        stage_filter = _seven_d_stage_key(stage) if stage else None
+        registry = self.seven_d_registry()
+        validation = self.validate_7d()
+        stage_by_key = {str(item["key"]): dict(item) for item in registry["stages"]}
+
+        artifact_types_by_stage: dict[str, list[dict[str, Any]]] = {}
+        for item in registry["artifact_types"]:
+            key = str(item.get("stage") or "")
+            artifact_types_by_stage.setdefault(key, []).append(dict(item))
+        for items in artifact_types_by_stage.values():
+            items.sort(key=lambda item: str(item.get("type") or ""))
+
+        concepts_by_stage: dict[str, list[dict[str, Any]]] = {}
+        for concept in self.list_7d_artifact_concepts(stage=stage_filter):
+            mapping = concept.get("seven_d") or {}
+            key = str(mapping.get("stage") or "")
+            concepts_by_stage.setdefault(key, []).append(concept)
+        for concepts in concepts_by_stage.values():
+            concepts.sort(key=lambda item: str(item.get("id") or ""))
+
+        stages: list[dict[str, Any]] = []
+        selected_stages = sorted(stage_by_key.values(), key=lambda item: int(item.get("order") or 0))
+        for stage_item in selected_stages:
+            key = str(stage_item["key"])
+            if stage_filter and key != stage_filter:
+                continue
+            artifact_types = artifact_types_by_stage.get(key, [])
+            concepts = concepts_by_stage.get(key, [])
+            present_types = {str(item.get("type") or "") for item in concepts}
+            registered_types = {str(item.get("type") or "") for item in artifact_types}
+            gaps: list[dict[str, Any]] = []
+            if not concepts:
+                gaps.append(
+                    {
+                        "kind": "stage_empty",
+                        "message": "No OKF concepts with registered 7D artifact types are mapped to this stage.",
+                    }
+                )
+            missing_types = sorted(registered_types - present_types)
+            for type_name in missing_types:
+                gaps.append(
+                    {
+                        "kind": "artifact_type_missing",
+                        "type": type_name,
+                        "message": f"No OKF concept with type `{type_name}` is mapped to this stage.",
+                    }
+                )
+            stages.append(
+                {
+                    **stage_item,
+                    "artifact_types": artifact_types,
+                    "concepts": concepts,
+                    "concept_count": len(concepts),
+                    "missing_artifact_types": missing_types,
+                    "gaps": gaps,
+                    "gap_count": len(gaps),
+                }
+            )
+
+        return {
+            "bundle": str(self.root),
+            "stage_filter": stage_filter,
+            "validation": validation,
+            "stage_count": len(stages),
+            "registered_artifact_type_count": len(registry["artifact_types"]),
+            "mapped_concept_count": sum(int(item["concept_count"]) for item in stages),
+            "gap_count": sum(int(item["gap_count"]) for item in stages),
+            "stages": stages,
+        }
+
+    def render_seven_d_stage_report(self, stage: str | None = None) -> str:
+        """Render the 7D stage report as compact Markdown."""
+        report = self.seven_d_stage_report(stage=stage)
+        validation = report["validation"]
+        lines = [
+            "# 7D Stage Report",
+            "",
+            f"Bundle: `{report['bundle']}`",
+            f"Validation: {'OK' if validation.get('ok') else 'FAILED'}",
+            f"Registered artifact types: {report['registered_artifact_type_count']}",
+            f"Mapped artifact concepts: {report['mapped_concept_count']}",
+            f"Lifecycle gaps: {report['gap_count']}",
+            "",
+        ]
+        if validation.get("errors"):
+            lines += ["## Errors", ""] + [f"- {item}" for item in validation["errors"]] + [""]
+        if validation.get("warnings"):
+            lines += ["## Warnings", ""] + [f"- {item}" for item in validation["warnings"]] + [""]
+
+        for stage_item in report["stages"]:
+            lines += [
+                f"## {stage_item['order']}. {stage_item['name']}",
+                "",
+                str(stage_item.get("description") or ""),
+                "",
+                "Registered artifact types:",
+                "",
+            ]
+            for item in stage_item["artifact_types"]:
+                responsible = ", ".join(item.get("responsible") or [])
+                consulted = ", ".join(item.get("consulted") or [])
+                informed = ", ".join(item.get("informed") or [])
+                lines.append(
+                    f"- `{item['type']}` — R: {responsible}; A: {item.get('accountable')}; "
+                    f"C: {consulted}; I: {informed}"
+                )
+            lines += ["", "Concepts:", ""]
+            if stage_item["concepts"]:
+                for concept in stage_item["concepts"]:
+                    lines.append(
+                        f"- [{concept.get('title') or concept['id']}]({concept['path']}) "
+                        f"— `{concept.get('type')}` (`{concept['id']}`)"
+                    )
+            else:
+                lines.append("- No OKF concepts mapped to this stage.")
+            if stage_item["gaps"]:
+                lines += ["", "Gaps:", ""]
+                for gap in stage_item["gaps"]:
+                    lines.append(f"- {gap['message']}")
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def seven_d_dashboard_data(self, stage: str | None = None) -> dict[str, Any]:
+        """Return 7D Kanban dashboard data with readonly OKF document content."""
+        report = self.seven_d_stage_report(stage=stage)
+        for stage_item in report["stages"]:
+            enriched: list[dict[str, Any]] = []
+            for concept in stage_item.get("concepts", []):
+                full = self.read_concept(str(concept["id"]), include_body=True)
+                item = dict(concept)
+                item["frontmatter"] = full.get("frontmatter", {})
+                item["body"] = full.get("body", "")
+                enriched.append(item)
+            stage_item["concepts"] = enriched
+        return {"generated_at": utc_now_iso(), "report": report}
+
+    def render_seven_d_dashboard_html(self, stage: str | None = None) -> str:
+        """Render an interactive self-contained 7D Kanban dashboard."""
+        dashboard = self.seven_d_dashboard_data(stage=stage)
+        report = dashboard["report"]
+        validation = report["validation"]
+        data_json = json.dumps(dashboard, ensure_ascii=False).replace("</", "<\\/")
+
+        def esc(value: Any) -> str:
+            return html.escape(str(value), quote=True)
+
+        columns: list[str] = []
+        for stage_item in report["stages"]:
+            stage_key = esc(stage_item["key"])
+            cards: list[str] = []
+            for concept in stage_item.get("concepts", []):
+                tags = concept.get("tags") or []
+                tag_html = "".join(f'<span class="tag">{esc(tag)}</span>' for tag in tags)
+                cards.append(
+                    "\n".join(
+                        [
+                            f'<button class="card concept-card" type="button" data-kind="concept" data-id="{esc(concept["id"])}">',
+                            f'  <span class="card-type">{esc(concept.get("type") or "Concept")}</span>',
+                            f'  <strong>{esc(concept.get("title") or concept["id"])}</strong>',
+                            f'  <span class="card-desc">{esc(concept.get("description") or "No description")}</span>',
+                            f'  <span class="tags">{tag_html}</span>',
+                            "</button>",
+                        ]
+                    )
+                )
+            missing_types = set(str(item) for item in stage_item.get("missing_artifact_types", []))
+            for artifact in stage_item.get("artifact_types", []):
+                if str(artifact.get("type") or "") not in missing_types:
+                    continue
+                gap_id = f"{stage_item['key']}::{artifact['type']}"
+                cards.append(
+                    "\n".join(
+                        [
+                            f'<button class="card gap-card" type="button" data-kind="artifact" data-id="{esc(gap_id)}">',
+                            f'  <span class="card-type">Expected artifact</span>',
+                            f'  <strong>{esc(artifact["type"])}</strong>',
+                            '  <span class="card-desc">No OKF concept currently maps to this artifact type.</span>',
+                            "</button>",
+                        ]
+                    )
+                )
+            columns.append(
+                "\n".join(
+                    [
+                        f'<section class="column" id="stage-{stage_key}">',
+                        '  <header class="column-header">',
+                        "    <div>",
+                        f'      <span class="stage-order">{esc(stage_item["order"])}</span>',
+                        f'      <h2>{esc(stage_item["name"])}</h2>',
+                        f'      <p>{esc(stage_item.get("description") or "")}</p>',
+                        "    </div>",
+                        f'    <span class="gap-count">{esc(stage_item["gap_count"])} gaps</span>',
+                        "  </header>",
+                        f'  <div class="cards">{"".join(cards)}</div>',
+                        "</section>",
+                    ]
+                )
+            )
+
+        status_text = "OK" if validation.get("ok") else "FAILED"
+        generated_at = esc(dashboard["generated_at"])
+        bundle = esc(report["bundle"])
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>7D Kanban Dashboard</title>
+  <style>
+    :root {{
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-soft: #172033;
+      --card: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --line: #374151;
+      --accent: #60a5fa;
+      --ok: #22c55e;
+      --gap: #f59e0b;
+      --danger: #ef4444;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #1e3a8a 0, var(--bg) 34rem);
+      color: var(--text);
+    }}
+    main {{ padding: 28px; }}
+    h1 {{ margin: 0; font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -0.05em; }}
+    h2 {{ margin: 0; font-size: 1.1rem; }}
+    p {{ margin: 0; }}
+    code, pre {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }}
+    .topbar {{ display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 22px; }}
+    .muted {{ color: var(--muted); }}
+    .stats {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }}
+    .stat {{ border: 1px solid var(--line); background: #02061766; border-radius: 999px; padding: 8px 12px; }}
+    .stat strong {{ color: var(--accent); }}
+    .stat.ok strong {{ color: var(--ok); }}
+    .stat.gap strong {{ color: var(--gap); }}
+    .board {{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax(310px, 1fr); gap: 16px; overflow-x: auto; padding: 8px 0 20px; min-height: 68vh; }}
+    .column {{ background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 18px; min-height: 540px; display: flex; flex-direction: column; box-shadow: 0 20px 60px #00000033; }}
+    .column-header {{ padding: 14px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }}
+    .column-header p {{ color: var(--muted); font-size: 0.88rem; margin-top: 6px; }}
+    .stage-order {{ display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--accent); color: #07101f; font-weight: 800; margin-bottom: 8px; }}
+    .gap-count {{ white-space: nowrap; color: #fed7aa; background: #7c2d12; border: 1px solid #9a3412; border-radius: 999px; padding: 4px 8px; font-size: 0.78rem; }}
+    .cards {{ padding: 12px; display: grid; gap: 10px; align-content: start; }}
+    .card {{ text-align: left; width: 100%; border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--card); color: var(--text); cursor: pointer; transition: transform .12s ease, border-color .12s ease, background .12s ease; }}
+    .card:hover {{ transform: translateY(-2px); border-color: var(--accent); background: #263244; }}
+    .gap-card {{ border-style: dashed; background: #271d10; }}
+    .card-type {{ display: inline-block; color: var(--accent); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px; }}
+    .card strong {{ display: block; margin-bottom: 6px; }}
+    .card-desc {{ display: block; color: var(--muted); font-size: 0.88rem; }}
+    .tags {{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }}
+    .tag {{ border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; color: var(--muted); font-size: 0.75rem; }}
+    dialog {{ width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 18px; padding: 0; background: var(--panel); color: var(--text); box-shadow: 0 30px 90px #00000088; }}
+    dialog::backdrop {{ background: #020617cc; }}
+    .modal-head {{ position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line); padding: 16px 18px; display: flex; justify-content: space-between; gap: 16px; z-index: 1; }}
+    .modal-body {{ padding: 18px; display: grid; gap: 16px; }}
+    .close {{ border: 1px solid var(--line); background: var(--panel-soft); color: var(--text); border-radius: 10px; padding: 7px 10px; cursor: pointer; }}
+    .meta {{ width: 100%; border-collapse: collapse; }}
+    .meta th, .meta td {{ border-bottom: 1px solid var(--line); padding: 8px; vertical-align: top; text-align: left; }}
+    .meta th {{ color: var(--muted); width: 170px; font-weight: 600; }}
+    .doc, .json {{ background: #020617; border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow: auto; white-space: pre-wrap; max-height: 44vh; }}
+    .section-title {{ color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }}
+    @media (max-width: 760px) {{ main {{ padding: 18px; }} .board {{ grid-auto-columns: minmax(280px, 88vw); }} }}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>7D Kanban Dashboard</h1>
+        <p class="muted">Generated by MCP at <code>{generated_at}</code></p>
+        <p class="muted">Bundle: <code>{bundle}</code></p>
+      </div>
+      <div class="stats" aria-label="Summary">
+        <span class="stat ok">Validation: <strong>{esc(status_text)}</strong></span>
+        <span class="stat">Stages: <strong>{esc(report['stage_count'])}</strong></span>
+        <span class="stat">Artifacts: <strong>{esc(report['registered_artifact_type_count'])}</strong></span>
+        <span class="stat">Mapped concepts: <strong>{esc(report['mapped_concept_count'])}</strong></span>
+        <span class="stat gap">Gaps: <strong>{esc(report['gap_count'])}</strong></span>
+      </div>
+    </div>
+    <div class="board" aria-label="7D Kanban board">
+      {''.join(columns)}
+    </div>
+  </main>
+
+  <dialog id="details">
+    <div class="modal-head">
+      <div>
+        <div id="modalType" class="card-type"></div>
+        <h2 id="modalTitle"></h2>
+        <p id="modalDesc" class="muted"></p>
+      </div>
+      <button class="close" type="button" id="closeModal">Close</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <script type="application/json" id="dashboard-data">{data_json}</script>
+  <script>
+    const data = JSON.parse(document.getElementById('dashboard-data').textContent);
+    const dialog = document.getElementById('details');
+    const modalType = document.getElementById('modalType');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalDesc = document.getElementById('modalDesc');
+    const modalBody = document.getElementById('modalBody');
+    const concepts = new Map();
+    const artifacts = new Map();
+    for (const stage of data.report.stages) {{
+      for (const concept of stage.concepts || []) concepts.set(concept.id, {{...concept, stage}});
+      for (const artifact of stage.artifact_types || []) artifacts.set(`${{stage.key}}::${{artifact.type}}`, {{...artifact, stage}});
+    }}
+    function escapeHtml(value) {{
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[ch]));
+    }}
+    function row(label, value) {{ return `<tr><th>${{escapeHtml(label)}}</th><td>${{escapeHtml(value || '—')}}</td></tr>`; }}
+    function showConcept(concept) {{
+      modalType.textContent = concept.type || 'Concept';
+      modalTitle.textContent = concept.title || concept.id;
+      modalDesc.textContent = concept.description || '';
+      const seven = concept.seven_d || {{}};
+      modalBody.innerHTML = `
+        <div><div class="section-title">Metadata</div><table class="meta">
+          ${{row('Concept ID', concept.id)}}
+          ${{row('Path', concept.path)}}
+          ${{row('Stage', seven.stage_name || concept.stage.name)}}
+          ${{row('Type', concept.type)}}
+          ${{row('Tags', (concept.tags || []).join(', '))}}
+          ${{row('Resource', concept.resource)}}
+          ${{row('Responsible', (seven.responsible || []).join(', '))}}
+          ${{row('Accountable', seven.accountable)}}
+          ${{row('Consulted', (seven.consulted || []).join(', '))}}
+          ${{row('Informed', (seven.informed || []).join(', '))}}
+        </table></div>
+        <div><div class="section-title">Frontmatter</div><pre class="json">${{escapeHtml(JSON.stringify(concept.frontmatter || {{}}, null, 2))}}</pre></div>
+        <div><div class="section-title">Readonly OKF body</div><pre class="doc">${{escapeHtml(concept.body || 'No body content.')}}</pre></div>`;
+      dialog.showModal();
+    }}
+    function showArtifact(artifact) {{
+      modalType.textContent = 'Expected artifact';
+      modalTitle.textContent = artifact.type;
+      modalDesc.textContent = 'No OKF concept currently maps to this 7D artifact type.';
+      modalBody.innerHTML = `
+        <div><div class="section-title">Registry metadata</div><table class="meta">
+          ${{row('Stage', artifact.stage.name)}}
+          ${{row('Stage key', artifact.stage.key)}}
+          ${{row('Type', artifact.type)}}
+          ${{row('Responsible', (artifact.responsible || []).join(', '))}}
+          ${{row('Accountable', artifact.accountable)}}
+          ${{row('Consulted', (artifact.consulted || []).join(', '))}}
+          ${{row('Informed', (artifact.informed || []).join(', '))}}
+        </table></div>
+        <div><div class="section-title">Gap</div><pre class="doc">Create a normal OKF concept with frontmatter type: ${{escapeHtml(artifact.type)}}. Do not add 7D-specific frontmatter keys.</pre></div>`;
+      dialog.showModal();
+    }}
+    document.querySelectorAll('[data-kind]').forEach(card => card.addEventListener('click', () => {{
+      const kind = card.dataset.kind;
+      const id = card.dataset.id;
+      if (kind === 'concept') showConcept(concepts.get(id));
+      if (kind === 'artifact') showArtifact(artifacts.get(id));
+    }}));
+    document.getElementById('closeModal').addEventListener('click', () => dialog.close());
+  </script>
+</body>
+</html>
+"""
+
+    def write_seven_d_dashboard_html(self, out_path: str | Path = "artifacts/7d-dashboard.html") -> dict[str, Any]:
+        """Write the interactive 7D Kanban dashboard HTML under repository artifacts/."""
+        html_text = self.render_seven_d_dashboard_html()
+        out = self.generated_artifact_path(out_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(html_text, encoding="utf-8")
+        report = self.seven_d_stage_report()
+        return {
+            "path": self.artifact_display_path(out),
+            "bytes": len(html_text.encode("utf-8")),
+            "stage_count": report.get("stage_count", 0),
+            "registered_artifact_type_count": report.get("registered_artifact_type_count", 0),
+            "mapped_concept_count": report.get("mapped_concept_count", 0),
+            "gap_count": report.get("gap_count", 0),
+            "validation": report.get("validation", {}),
+        }
 
     def seven_d_feature_status(self, concept_id: str) -> dict[str, Any]:
         """Derive a concept's 7D progress from its own or linked artifact types."""
@@ -1094,16 +1524,12 @@ class OKFBundle:
             "edges": edges,
         }
 
-    def write_graph(self, out_path: str | Path = "graph.json") -> dict[str, Any]:
+    def write_graph(self, out_path: str | Path = "artifacts/okf/graph.json") -> dict[str, Any]:
         graph = self.build_graph()
-        out = Path(out_path)
-        if not out.is_absolute():
-            out = self.root / out
-        out = out.resolve()
-        self._assert_inside(out)
+        out = self.generated_artifact_path(out_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(graph, ensure_ascii=False) + "\n", encoding="utf-8")
-        return {"path": out.relative_to(self.root).as_posix(), **graph}
+        return {"path": self.artifact_display_path(out), **graph}
 
     def render_graph_html(self, graph: dict[str, Any] | None = None) -> str:
         """Return a self-contained HTML report for the OKF graph."""
@@ -1111,22 +1537,18 @@ class OKFBundle:
 
     def write_graph_html(
         self,
-        out_path: str | Path = "graph.html",
+        out_path: str | Path = "artifacts/okf/graph.html",
         *,
         graph: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Write a self-contained HTML graph report inside the bundle."""
+        """Write a self-contained HTML graph report under repository artifacts/."""
         graph_data = graph or self.build_graph()
-        out = Path(out_path)
-        if not out.is_absolute():
-            out = self.root / out
-        out = out.resolve()
-        self._assert_inside(out)
+        out = self.generated_artifact_path(out_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         html_text = self.render_graph_html(graph_data)
         out.write_text(html_text, encoding="utf-8")
         return {
-            "path": out.relative_to(self.root).as_posix(),
+            "path": self.artifact_display_path(out),
             "bytes": len(html_text.encode("utf-8")),
             "node_count": graph_data.get("node_count", 0),
             "edge_count": graph_data.get("edge_count", 0),

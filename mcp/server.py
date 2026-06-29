@@ -172,6 +172,51 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         return bundle.list_7d_artifact_concepts(stage=stage)
 
     @mcp.tool
+    def seven_d_stage_report(stage: str | None = None) -> dict[str, Any]:
+        """Generate a structured report for 7D lifecycle stage coverage.
+
+        When `stage` is omitted, returns all seven stages. Stage may be either a
+        registry key such as `discover` or a display name such as `Discover`.
+        """
+        return bundle.seven_d_stage_report(stage=stage)
+
+    @mcp.tool
+    def seven_d_stage_report_markdown(stage: str | None = None) -> str:
+        """Generate a compact Markdown report for 7D lifecycle stage coverage."""
+        return bundle.render_seven_d_stage_report(stage=stage)
+
+    @mcp.tool
+    def seven_d_dashboard(
+        write: bool = True,
+        out_path: str = "artifacts/7d-dashboard.html",
+        include_html: bool = False,
+    ) -> dict[str, Any]:
+        """Generate an interactive 7D Kanban dashboard.
+
+        The dashboard is a self-contained HTML view with one column per 7D
+        stage. Concept cards open a readonly modal with OKF metadata,
+        frontmatter, and document body. When `write` is true, the HTML file is
+        written under the repository `artifacts/` directory at `out_path`.
+        """
+        if write:
+            result = bundle.write_seven_d_dashboard_html(out_path)
+            if include_html:
+                result["html"] = bundle.render_seven_d_dashboard_html()
+            return result
+
+        report = bundle.seven_d_stage_report()
+        result = {
+            "stage_count": report.get("stage_count", 0),
+            "registered_artifact_type_count": report.get("registered_artifact_type_count", 0),
+            "mapped_concept_count": report.get("mapped_concept_count", 0),
+            "gap_count": report.get("gap_count", 0),
+            "validation": report.get("validation", {}),
+        }
+        if include_html:
+            result["html"] = bundle.render_seven_d_dashboard_html()
+        return result
+
+    @mcp.tool
     def seven_d_feature_status(concept_id: str) -> dict[str, Any]:
         """Derive a concept's 7D progress from linked artifact concept types."""
         return bundle.seven_d_feature_status(concept_id)
@@ -198,14 +243,14 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
     @mcp.tool
     def build_graph(
         write: bool = False,
-        out_path: str = "graph.json",
+        out_path: str = "artifacts/okf/graph.json",
         html: bool = False,
-        html_out_path: str = "graph.html",
+        html_out_path: str = "artifacts/okf/graph.html",
     ) -> dict[str, Any]:
         """Build the OKF concept/link graph.
 
-        If `write` is true, also write the graph JSON inside the bundle at
-        `out_path` (defaults to `graph.json`). If `html` is true, also write a
+        If `write` is true, also write the graph JSON under repository
+        `artifacts/` at `out_path`. If `html` is true, also write a
         self-contained HTML graph report at `html_out_path`.
         """
         graph = bundle.write_graph(out_path) if write else bundle.build_graph()

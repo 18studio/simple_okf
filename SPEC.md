@@ -14,7 +14,7 @@ The template is intentionally limited to:
 - Markdown links as a graph;
 - a FastMCP server for agent access to the bundle;
 - a local OKF-aware RAG layer over concepts;
-- CLI scripts inside the MCP package as a fallback;
+- a multi-app CLI in the MCP package, plus console commands through a non-conflicting bootstrap, as fallback tools;
 - a project skill for agents.
 
 The template establishes the local filesystem contract for OKF and does not require external services to read or validate the bundle.
@@ -162,9 +162,9 @@ and is governed by [ACCESS-005](../../requirements/access/ACCESS-005.md).
 
 The relationship type is defined by the surrounding text. Relative links are preferred for internal relationships.
 
-### 6. OKF Skill
+### 6. Project Skills
 
-Project skill:
+OKF skill:
 
 ```text
 .agents/skills/okf/SKILL.md
@@ -179,21 +179,41 @@ Use cases:
 - generate graph JSON;
 - navigate the bundle as an agent-readable knowledge base.
 
+7D skill:
+
+```text
+.agents/skills/7d/SKILL.md
+```
+
+Use cases:
+
+- validate 7D registry usage;
+- generate reports by 7D lifecycle stage;
+- derive a feature's 7D progress from linked OKF artifacts;
+- guide creation or editing of 7D lifecycle artifacts without changing OKF
+  concept format.
+
 ### 7. Skill templates and references
 
-The skill stores only instructions, templates, and reference materials:
+Project skills store only agent instructions, templates, and references:
 
 ```text
 .agents/skills/okf/SKILL.md
 .agents/skills/okf/templates/
 .agents/skills/okf/references/
+.agents/skills/7d/SKILL.md
 ```
 
-The functionality of the former skill scripts has been moved to the MCP server/tools. CLI fallback scripts are located here:
+Executable helper commands belong to the MCP package multi-app CLI:
 
 ```text
-mcp/scripts/
+mcp/__main__.py
+mcp/cli.py
 ```
+
+The canonical CLI implementation is `mcp/cli.py`. Installable console scripts
+enter through `simple_okf_mcp/cli.py`, a small bootstrap package that avoids the
+upstream MCP SDK `mcp` namespace collision and delegates to `mcp/cli.py`.
 
 ### 8. OKF-aware RAG
 
@@ -213,7 +233,7 @@ Minimum variables:
 
 ```dotenv
 RAG_BUNDLE_DIR=okf
-RAG_ARTIFACTS_DIR=mcp/rag/artifacts
+RAG_ARTIFACTS_DIR=artifacts/rag
 RAG_RETRIEVAL_RESULT_LIMIT=10
 RAG_ANSWER_EVIDENCE_LIMIT=5
 ```
@@ -250,6 +270,9 @@ validate_bundle
 seven_d_registry
 seven_d_mapping_for_type
 list_7d_artifact_concepts
+seven_d_stage_report
+seven_d_stage_report_markdown
+seven_d_dashboard
 seven_d_feature_status
 validate_7d
 generate_indexes
@@ -277,22 +300,26 @@ okf://bundle/graph
 The primary agent-facing contract is MCP:
 
 ```text
-validate_okf.py           -> validate_bundle
-generate_okf_indexes.py   -> generate_indexes
-export_okf.py             -> export_source_documents
-generate_okf_graph.py     -> build_graph(write=true, out_path="graph.json", html=true, html_out_path="graph.html")
+python3 -m mcp validate          -> validate_bundle
+python3 -m mcp indexes           -> generate_indexes
+python3 -m mcp export            -> export_source_documents
+python3 -m mcp graph             -> build_graph JSON to stdout by default; use --out/--html-out to write artifacts
+python3 -m mcp 7d ...            -> seven_d_stage_report / seven_d_dashboard / validate_7d / seven_d_feature_status
+python3 -m mcp rag ...           -> local OKF RAG inspect / refresh / retrieve
 ```
 
-CLI fallback:
+Multi-app CLI fallback:
 
 ```bash
-python3 mcp/scripts/validate_okf.py okf
-python3 mcp/scripts/generate_okf_indexes.py okf
-python3 mcp/scripts/export_okf.py --source system --out okf
-python3 mcp/scripts/generate_okf_graph.py okf --out okf/graph.json --html-out okf/graph.html
-python3 mcp/scripts/inspect_rag_corpus.py --pretty
-python3 mcp/scripts/refresh_rag_index.py --pretty
-python3 mcp/scripts/rag_retrieve.py "project access" --pretty
+python3 -m mcp validate okf
+python3 -m mcp indexes okf
+python3 -m mcp export system --out okf
+python3 -m mcp graph okf --out artifacts/okf/graph.json --html-out artifacts/okf/graph.html
+python3 -m mcp rag inspect --pretty
+python3 -m mcp rag refresh --pretty
+python3 -m mcp rag retrieve "project access" --pretty
+python3 -m mcp 7d report --bundle okf
+python3 -m mcp 7d dashboard --bundle okf --out artifacts/7d-dashboard.html
 ```
 
 MCP stdio server:

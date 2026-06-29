@@ -7,7 +7,9 @@
         ".",
         "run",
         "python",
-        "mcp/__main__.py",
+        "-m",
+        "mcp",
+        "server",
         "--bundle",
         "okf"
       ],

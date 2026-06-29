@@ -60,6 +60,39 @@ def _path_from_env(root: Path, values: dict[str, str], key: str, default: str) -
     return path.resolve()
 
 
+_LEGACY_RAG_ARTIFACT_DIRS = {
+    "rag/artifacts",
+    "./rag/artifacts",
+    "mcp/rag/artifacts",
+    "./mcp/rag/artifacts",
+    "artifacts",
+    "./artifacts",
+}
+
+
+def _rag_artifacts_dir_from_env(root: Path, values: dict[str, str]) -> Path:
+    raw = values.get("RAG_ARTIFACTS_DIR", "artifacts/rag").strip()
+    if not raw:
+        raise RagConfigError("RAG_ARTIFACTS_DIR must not be empty")
+    if raw in _LEGACY_RAG_ARTIFACT_DIRS:
+        raw = "artifacts/rag"
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    resolved = path.resolve()
+
+    artifacts_root = (root / "artifacts").resolve()
+    try:
+        resolved.relative_to(artifacts_root)
+    except ValueError as exc:
+        raise RagConfigError(
+            "RAG_ARTIFACTS_DIR must resolve inside repository artifacts/: "
+            f"{values.get('RAG_ARTIFACTS_DIR', 'artifacts/rag')!r} -> {resolved}"
+        ) from exc
+    return resolved
+
+
 def _int_from_env(values: dict[str, str], key: str, default: int) -> int:
     raw = values.get(key)
     if raw is None or not raw.strip():
@@ -83,12 +116,7 @@ def load_settings(env_file: Path | None = None) -> RagSettings:
         )
     values = _parse_env_file(selected_env)
     bundle_dir = _path_from_env(root, values, "RAG_BUNDLE_DIR", "okf")
-    # `rag/artifacts` was used by the first draft; keep moved env files from
-    # recreating a deleted top-level rag/ directory unless a different custom
-    # path is explicitly configured.
-    if values.get("RAG_ARTIFACTS_DIR", "").strip() in {"rag/artifacts", "./rag/artifacts"}:
-        values = {**values, "RAG_ARTIFACTS_DIR": "mcp/rag/artifacts"}
-    artifacts_dir = _path_from_env(root, values, "RAG_ARTIFACTS_DIR", "mcp/rag/artifacts")
+    artifacts_dir = _rag_artifacts_dir_from_env(root, values)
     if not bundle_dir.is_dir():
         raise RagConfigError(f"RAG_BUNDLE_DIR does not exist or is not a directory: {bundle_dir}")
     artifacts_dir.mkdir(parents=True, exist_ok=True)

@@ -9,8 +9,10 @@ from the same directory.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 
 __version__ = "0.1.0"
 
@@ -39,10 +41,43 @@ def _extend_with_sdk_package() -> None:
             return
 
 
+def _load_local_cli_module() -> ModuleType:
+    """Expose this repository's multi-app CLI as ``mcp.cli``.
+
+    The SDK path must stay before the local path for imports such as
+    ``mcp.server.lowlevel``.  The one intentional exception is ``mcp.cli``:
+    Simple OKF owns that public CLI surface, so normal ``import mcp.cli`` should
+    resolve to local ``mcp/cli.py`` instead of the SDK's optional Typer CLI.
+    """
+
+    module_name = f"{__name__}.cli"
+    local_cli = _LOCAL_PACKAGE_DIR / "cli.py"
+    existing = sys.modules.get(module_name)
+    if existing is not None:
+        module_file = getattr(existing, "__file__", None)
+        try:
+            if module_file is not None and Path(module_file).resolve() == local_cli:
+                return existing
+        except OSError:
+            pass
+        del sys.modules[module_name]
+
+    spec = importlib.util.spec_from_file_location(module_name, local_cli)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load local Simple OKF CLI from {local_cli}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    setattr(sys.modules[__name__], "cli", module)
+    spec.loader.exec_module(module)
+    return module
+
+
 _extend_with_sdk_package()
+_load_local_cli_module()
 
 # Re-export the official MCP SDK public API used by FastMCP.  These imports are
-# resolved from the SDK path inserted above, not from local OKF modules.
+# resolved from the SDK path inserted above, not from local OKF modules.  The
+# local ``mcp.cli`` module is preloaded above as the targeted exception.
 try:  # pragma: no cover - exercised by the runtime MCP server import path.
     from .client.session import ClientSession
     from .client.session_group import ClientSessionGroup

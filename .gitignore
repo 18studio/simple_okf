@@ -4,3 +4,4 @@ __pycache__/
 venv/
 external/
 .DS_Store
+artifacts/
