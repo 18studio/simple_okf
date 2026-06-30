@@ -120,82 +120,67 @@ uv run python -m okf_mcp rag inspect --env /path/to/.env --pretty
 
 ### HLD-схема сервиса
 
-Simple OKF — это один локальный Python-сервис с MCP API и CLI-командами поверх файлового OKF-бандла. В Docker Compose поднимается только контейнер `simple-okf`; OpenSearch, Qdrant и OpenAI не требуются для текущего локального поиска.
+Simple OKF — это локальный сервис для работы с OKF-бандлом через MCP API или CLI. Он хранит знания в Markdown-файлах, строит производные артефакты и выполняет локальный RAG-поиск без обязательных внешних зависимостей.
 
 ```mermaid
 flowchart LR
     subgraph clients["Клиенты"]
-        pi["Pi / MCP-клиент / агент"]
-        developer["Разработчик в терминале"]
+        agent["MCP-клиент / агент"]
+        developer["Разработчик"]
     end
 
-    subgraph runtime["Runtime: контейнер simple-okf или локальный Python"]
-        mcpServer["HTTP MCP-сервер\nokf_mcp.server / FastMCP\nпорт 8000"]
-        cli["CLI\npython -m okf_mcp / okf"]
-
-        subgraph app["Python package okf_mcp"]
-            toolApi["MCP tools и CLI handlers"]
-            okfCore["OKF Core\nпарсинг, валидация, индексы, граф"]
-            ragCore["Local RAG\nchunks, search, extractive answer"]
-            sevenD["7D helpers\nregistry, reports, dashboard"]
-        end
+    subgraph service["Simple OKF service"]
+        api["MCP API"]
+        cli["CLI"]
+        okf["OKF tooling"]
+        rag["Local RAG"]
+        lifecycle["7D reports"]
     end
 
     subgraph config["Конфигурация"]
-        composeEnv["docker compose env_file\nokf_mcp/rag/.env.example"]
-        localEnv["local env file\nokf_mcp/rag/.env"]
-        shellEnv["shell env / CLI flags\nOKF_BUNDLE, --bundle, --env"]
+        env["env-переменные"]
     end
 
-    subgraph storage["Файлы проекта"]
-        okfBundle["OKF bundle\n./okf -> /app/okf"]
-        artifacts["Generated artifacts\n./artifacts -> /app/artifacts"]
-        ragIndex["RAG JSON index\nartifacts/rag/*"]
-        graphFiles["Graph / dashboard HTML\nartifacts/okf/*, artifacts/7d-dashboard.html"]
+    subgraph storage["Файловое хранилище"]
+        bundle["OKF-бандл"]
+        artifacts["Сгенерированные артефакты"]
     end
 
-    subgraph future["Опциональные будущие интеграции"]
-        opensearch["OpenSearch"]
-        qdrant["Qdrant"]
-        openai["OpenAI API"]
+    subgraph optional["Будущие внешние интеграции"]
+        external["OpenSearch / Qdrant / OpenAI"]
     end
 
-    pi -->|"MCP over HTTP"| mcpServer
-    developer -->|"CLI commands"| cli
-    mcpServer --> toolApi
-    cli --> toolApi
+    agent --> api
+    developer --> cli
 
-    composeEnv --> toolApi
-    localEnv --> toolApi
-    shellEnv --> toolApi
+    env --> api
+    env --> cli
 
-    toolApi --> okfCore
-    toolApi --> ragCore
-    toolApi --> sevenD
+    api --> okf
+    api --> rag
+    api --> lifecycle
+    cli --> okf
+    cli --> rag
+    cli --> lifecycle
 
-    okfCore -->|"read/write concepts"| okfBundle
-    okfCore -->|"write indexes, graph"| artifacts
-    okfCore --> graphFiles
+    okf --> bundle
+    okf --> artifacts
+    rag --> bundle
+    rag --> artifacts
+    lifecycle --> bundle
+    lifecycle --> artifacts
 
-    ragCore -->|"read OKF concepts"| okfBundle
-    ragCore -->|"write/read local index"| ragIndex
-    ragIndex --> artifacts
-
-    sevenD -->|"derive reports from OKF links and types"| okfBundle
-    sevenD -->|"write dashboard"| graphFiles
-
-    ragCore -. reserved env only .-> opensearch
-    ragCore -. reserved env only .-> qdrant
-    ragCore -. reserved env only .-> openai
+    rag -. опционально .-> external
 ```
 
 На схеме:
 
-- **MCP-сервер** — основной сервис для Pi и других MCP-клиентов.
-- **CLI** — тот же функциональный слой для локальных команд и fallback-сценариев.
-- **OKF Core** — работа с Markdown-концептами в `okf/`.
-- **Local RAG** — локальный поиск по OKF-концептам без внешней базы и без LLM API.
-- **Generated artifacts** — производные файлы; каноничным источником знаний остаётся `okf/`.
+- **Simple OKF service** — единственный запускаемый сервис в локальном Docker Compose.
+- **MCP API** — вход для Pi, агентов и других MCP-клиентов.
+- **CLI** — вход для локальных команд и fallback-сценариев.
+- **OKF-бандл** — каноничное хранилище знаний.
+- **Сгенерированные артефакты** — индексы, графы, dashboard и RAG-индексы; их можно пересобрать из OKF-бандла.
+- **Будущие внешние интеграции** — не нужны для текущего локального запуска.
 
 ### Полезные команды
 
