@@ -120,67 +120,48 @@ uv run python -m okf_mcp rag inspect --env /path/to/.env --pretty
 
 ### HLD-схема сервиса
 
-Simple OKF — это локальный сервис для работы с OKF-бандлом через MCP API или CLI. Он хранит знания в Markdown-файлах, строит производные артефакты и выполняет локальный RAG-поиск без обязательных внешних зависимостей.
+Simple OKF — это локальный сервис для ведения agent-readable knowledge base. Он принимает запросы от агентов и разработчиков, работает с OKF-бандлом как с источником истины и создаёт производные артефакты для навигации, поиска и отчётности.
 
 ```mermaid
 flowchart LR
-    subgraph clients["Клиенты"]
-        agent["MCP-клиент / агент"]
-        developer["Разработчик"]
-    end
+    actors["Агенты и разработчики"]
 
     subgraph service["Simple OKF service"]
-        api["MCP API"]
-        cli["CLI"]
-        okf["OKF tooling"]
-        rag["Local RAG"]
-        lifecycle["7D reports"]
+        access["Интерфейсы доступа\nMCP API и CLI"]
+        knowledge["Knowledge management\nчтение, поиск и изменение концептов"]
+        quality["Quality automation\nвалидация, индексы, граф"]
+        retrieval["Local retrieval\nRAG-поиск и ответы с цитатами"]
+        lifecycle["Lifecycle reporting\n7D-отчёты и dashboard"]
     end
 
-    subgraph config["Конфигурация"]
-        env["env-переменные"]
-    end
+    bundle["OKF-бандл\nканоничные Markdown-концепты"]
+    artifacts["Производные артефакты\nиндексы, граф, dashboard, RAG-индекс"]
+    external["Будущие внешние RAG-интеграции"]
 
-    subgraph storage["Файловое хранилище"]
-        bundle["OKF-бандл"]
-        artifacts["Сгенерированные артефакты"]
-    end
+    actors --> access
+    access --> knowledge
+    access --> quality
+    access --> retrieval
+    access --> lifecycle
 
-    subgraph optional["Будущие внешние интеграции"]
-        external["OpenSearch / Qdrant / OpenAI"]
-    end
-
-    agent --> api
-    developer --> cli
-
-    env --> api
-    env --> cli
-
-    api --> okf
-    api --> rag
-    api --> lifecycle
-    cli --> okf
-    cli --> rag
-    cli --> lifecycle
-
-    okf --> bundle
-    okf --> artifacts
-    rag --> bundle
-    rag --> artifacts
+    knowledge <--> bundle
+    quality --> bundle
+    retrieval --> bundle
     lifecycle --> bundle
+
+    quality --> artifacts
+    retrieval --> artifacts
     lifecycle --> artifacts
 
-    rag -. опционально .-> external
+    retrieval -. опционально .-> external
 ```
 
 На схеме:
 
-- **Simple OKF service** — единственный запускаемый сервис в локальном Docker Compose.
-- **MCP API** — вход для Pi, агентов и других MCP-клиентов.
-- **CLI** — вход для локальных команд и fallback-сценариев.
-- **OKF-бандл** — каноничное хранилище знаний.
-- **Сгенерированные артефакты** — индексы, графы, dashboard и RAG-индексы; их можно пересобрать из OKF-бандла.
-- **Будущие внешние интеграции** — не нужны для текущего локального запуска.
+- **Simple OKF service** — граница системы: всё, что запускается локально для работы с OKF.
+- **OKF-бандл** — источник истины; знания хранятся как Markdown-концепты.
+- **Производные артефакты** — пересобираемые файлы для индексов, графа, dashboard и локального RAG.
+- **Будущие внешние RAG-интеграции** — не входят в текущий локальный запуск.
 
 ### Полезные команды
 
