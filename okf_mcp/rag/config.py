@@ -1,11 +1,13 @@
 """Configuration for OKF RAG tools.
 
 The real local environment is intentionally loaded from `okf_mcp/rag/.env`.
+Docker Compose can also inject the same keys through env_file/process env.
 Secrets are never stored in this package.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,6 +95,14 @@ def _rag_artifacts_dir_from_env(root: Path, values: dict[str, str]) -> Path:
     return resolved
 
 
+def _apply_process_env(values: dict[str, str]) -> dict[str, str]:
+    merged = dict(values)
+    for key, value in os.environ.items():
+        if key.startswith("RAG_") or key == "OPENAI_API_KEY":
+            merged[key] = value
+    return merged
+
+
 def _int_from_env(values: dict[str, str], key: str, default: int) -> int:
     raw = values.get(key)
     if raw is None or not raw.strip():
@@ -114,7 +124,7 @@ def load_settings(env_file: Path | None = None) -> RagSettings:
         raise RagConfigError(
             f"RAG env file not found: {display}. Create it from okf_mcp/rag/.env.example."
         )
-    values = _parse_env_file(selected_env)
+    values = _apply_process_env(_parse_env_file(selected_env))
     bundle_dir = _path_from_env(root, values, "RAG_BUNDLE_DIR", "okf")
     artifacts_dir = _rag_artifacts_dir_from_env(root, values)
     if not bundle_dir.is_dir():
