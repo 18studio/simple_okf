@@ -120,45 +120,28 @@ uv run python -m okf_mcp rag inspect --env /path/to/.env --pretty
 
 ### HLD-схема сервиса
 
-Simple OKF — это локальный сервис для ведения agent-readable knowledge base. Он принимает запросы от агентов и разработчиков, работает с OKF-бандлом как с источником истины и создаёт производные артефакты для навигации, поиска и отчётности.
+Simple OKF — это локальный сервис для ведения agent-readable knowledge base. На HLD-уровне у него одна граница системы: сервис принимает запросы, работает с OKF-бандлом как с источником истины и создаёт производные артефакты для навигации, поиска и отчётности.
 
 ```mermaid
-flowchart LR
-    actors["Агенты и разработчики"]
+flowchart TB
+    clients["Агенты и разработчики"]
 
-    subgraph service["Simple OKF service"]
-        access["Интерфейсы доступа\nMCP API и CLI"]
-        knowledge["Knowledge management\nчтение, поиск и изменение концептов"]
-        quality["Quality automation\nвалидация, индексы, граф"]
-        retrieval["Local retrieval\nRAG-поиск и ответы с цитатами"]
-        lifecycle["Lifecycle reporting\n7D-отчёты и dashboard"]
-    end
+    service["Simple OKF service\nлокальный MCP/CLI сервис\n\nОсновные функции:\nOKF management\nQuality automation\nLocal RAG\n7D reporting"]
 
     bundle["OKF-бандл\nканоничные Markdown-концепты"]
     artifacts["Производные артефакты\nиндексы, граф, dashboard, RAG-индекс"]
     external["Будущие внешние RAG-интеграции"]
 
-    actors --> access
-    access --> knowledge
-    access --> quality
-    access --> retrieval
-    access --> lifecycle
-
-    knowledge <--> bundle
-    quality --> bundle
-    retrieval --> bundle
-    lifecycle --> bundle
-
-    quality --> artifacts
-    retrieval --> artifacts
-    lifecycle --> artifacts
-
-    retrieval -. опционально .-> external
+    clients -->|"запросы"| service
+    service -->|"читает и изменяет"| bundle
+    service -->|"создаёт и обновляет"| artifacts
+    service -. "опционально в будущем" .-> external
 ```
 
 На схеме:
 
-- **Simple OKF service** — граница системы: всё, что запускается локально для работы с OKF.
+- **Агенты и разработчики** — потребители сервиса через MCP API или CLI.
+- **Simple OKF service** — единственная запускаемая система; внутри неё находятся OKF tooling, Local RAG и 7D-отчётность.
 - **OKF-бандл** — источник истины; знания хранятся как Markdown-концепты.
 - **Производные артефакты** — пересобираемые файлы для индексов, графа, dashboard и локального RAG.
 - **Будущие внешние RAG-интеграции** — не входят в текущий локальный запуск.
