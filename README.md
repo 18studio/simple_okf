@@ -52,6 +52,8 @@ uv run python -m okf_mcp rag refresh --pretty
 
 ### Запуск MCP-сервера
 
+Перед запуском MCP-сервера убедитесь, что ClickHouse, OpenSearch и Qdrant доступны по URL из `okf_mcp/rag/.env`: startup readiness проверяет эти зависимости. Быстрее всего поднять их через `docker compose up` или скопировать `.env.example` в `.env` и заменить service-name URL на host-side `127.0.0.1`.
+
 Для stdio-транспорта:
 
 ```sh
@@ -74,9 +76,9 @@ uv run python -m okf_mcp server --bundle okf --transport http --host 127.0.0.1 -
 docker compose up --build
 ```
 
-Сервис слушает `http://127.0.0.1:8000`. Compose не поднимает внешние сервисы вроде OpenSearch, Qdrant или OpenAI: текущий RAG работает локально с OKF-бандлом и JSON-артефактами.
+Сервис слушает `http://127.0.0.1:8000`. Compose также поднимает локальные ClickHouse, OpenSearch и Qdrant: MCP-сервер проверяет их готовность при старте и не начинает обслуживать запросы, если инфраструктура недоступна.
 
-Compose загружает переменные из [`okf_mcp/rag/.env.example`](./okf_mcp/rag/.env.example) через `env_file`.
+Compose загружает переменные из [`okf_mcp/rag/.env.example`](./okf_mcp/rag/.env.example) через `env_file`. Значения в примере используют имена compose-сервисов (`clickhouse`, `opensearch`, `qdrant`). Для запуска CLI/MCP с хоста скопируйте пример в `okf_mcp/rag/.env` и переопределите URL на `127.0.0.1`.
 
 Подключены локальные директории:
 
@@ -97,6 +99,8 @@ docker compose down
 cp okf_mcp/rag/.env.example okf_mcp/rag/.env
 ```
 
+Если `okf_mcp/rag/.env` был создан до появления readiness-проверок, обновите его из примера или добавьте ключи `RAG_CLICKHOUSE_*`, `RAG_OPENSEARCH_*` и `RAG_QDRANT_*`; без них MCP-сервер не сможет проверить локальную инфраструктуру при старте.
+
 Для разового запуска RAG с другим env-файлом используйте флаг `--env`:
 
 ```sh
@@ -110,13 +114,29 @@ uv run python -m okf_mcp rag inspect --env /path/to/.env --pretty
 | `RAG_ARTIFACTS_DIR` | `okf_mcp/rag/.env` / Compose `env_file` | `artifacts/rag` | Директория для локальных RAG-артефактов. Должна резолвиться внутрь директории `artifacts/`. |
 | `RAG_RETRIEVAL_RESULT_LIMIT` | `okf_mcp/rag/.env` / Compose `env_file` | `10` | Количество результатов по умолчанию для `rag retrieve`, если не передан `--limit`. Значение должно быть целым числом `>= 1`. |
 | `RAG_ANSWER_EVIDENCE_LIMIT` | `okf_mcp/rag/.env` / Compose `env_file` | `5` | Количество фрагментов-доказательств для extractive-ответа RAG. Значение должно быть целым числом `>= 1`. |
-| `RAG_OPENSEARCH_URL` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано для OpenSearch в будущей indexed RAG-интеграции. В Docker Compose по умолчанию пусто, потому что внешний OpenSearch не запускается и текущий локальный поиск его не использует. |
-| `RAG_QDRANT_URL` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано для Qdrant в будущем векторном индексе. В Docker Compose по умолчанию пусто, потому что внешний Qdrant не запускается и текущий локальный поиск его не использует. |
-| `OPENAI_API_KEY` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервированный секрет для будущей generative RAG-интеграции. Не коммитьте реальное значение. В Docker Compose по умолчанию пусто, потому что OpenAI не нужен для текущего локального поиска. |
+| `RAG_CLICKHOUSE_URL` | `okf_mcp/rag/.env` / Compose `env_file` | `http://clickhouse:8123` | ClickHouse HTTP endpoint for MCP startup readiness and future RAG/RAGAS event storage. Use `http://127.0.0.1:8123` from host-side runs. |
+| `RAG_CLICKHOUSE_USER` | `okf_mcp/rag/.env` / Compose `env_file` | `default` | ClickHouse user. |
+| `RAG_CLICKHOUSE_PASSWORD` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | ClickHouse password; keep real secrets local-only. |
+| `RAG_CLICKHOUSE_DATABASE` | `okf_mcp/rag/.env` / Compose `env_file` | `okf_rag` | Target ClickHouse database name for future event storage. |
+| `RAG_CLICKHOUSE_EVENTS_TABLE` | `okf_mcp/rag/.env` / Compose `env_file` | `rag_events` | Target ClickHouse events table name for future event storage. |
+| `RAG_OPENSEARCH_URL` | `okf_mcp/rag/.env` / Compose `env_file` | `http://opensearch:9200` | OpenSearch endpoint checked at MCP startup. Use `http://127.0.0.1:9200` from host-side runs. |
+| `RAG_OPENSEARCH_USER` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Optional OpenSearch basic-auth user. |
+| `RAG_OPENSEARCH_PASSWORD` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Optional OpenSearch basic-auth password; keep real secrets local-only. |
+| `RAG_OPENSEARCH_INDEX` | `okf_mcp/rag/.env` / Compose `env_file` | `okf-concepts` | Target OpenSearch index name for future indexed retrieval. |
+| `RAG_QDRANT_URL` | `okf_mcp/rag/.env` / Compose `env_file` | `http://qdrant:6333` | Qdrant endpoint checked at MCP startup. Use `http://127.0.0.1:6333` from host-side runs. |
+| `RAG_QDRANT_API_KEY` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Optional Qdrant API key; keep real secrets local-only. |
+| `RAG_QDRANT_COLLECTION` | `okf_mcp/rag/.env` / Compose `env_file` | `okf-concepts` | Target Qdrant collection name for future vector retrieval. |
+| `OPENAI_API_KEY` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервированный секрет для будущей generative RAG-интеграции. Не коммитьте реальное значение. |
 | `RAG_EMBEDDING_MODEL` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано: модель эмбеддингов для будущей generative/indexed RAG-интеграции. |
 | `RAG_EMBEDDING_DIMENSIONS` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано: размерность эмбеддингов для будущего векторного индекса. |
 | `RAG_GENERATION_MODEL` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано: модель генерации ответов для будущей generative RAG-интеграции. |
 | `RAG_REPHRASER_MODEL` | `okf_mcp/rag/.env` / Compose `env_file` | пусто | Зарезервировано: модель переформулирования запросов для будущей generative RAG-интеграции. |
+
+### OKF/7D contract кратко
+
+Каждый OKF-концепт обязан иметь frontmatter `type` и `status`. Разрешённые статусы: `draft`, `to-review`, `not-valid`, `valid`, `rejected`, `accepted`. Статус описывает состояние документа/артефакта, а не прогресс реализации; переходы между статусами рекомендательные и не являются validation gate.
+
+7D-стадия всегда выводится из `type` через registry в [`SPEC.md`](./SPEC.md). Нельзя добавлять 7D-specific frontmatter вроде `stage` или `raci`. Любой unmapped `type` — ошибка валидации, а отсутствие required lifecycle artifacts — отдельный coverage gap в 7D-отчётах.
 
 ### HLD-схема сервиса
 

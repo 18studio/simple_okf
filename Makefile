@@ -18,12 +18,17 @@ OKF_DIRS := \
 	$(BUNDLE)/ui/design-system \
 	$(BUNDLE)/ui/uikit
 
-.PHONY: help init validate rag-check indexes graph 7d-report 7d-dashboard 7d-validate guard-artifacts-dir clean-artifacts clean-project reset-empty
+.PHONY: help init validate test smoke e2e quality live-agent docker-compose-check rag-check indexes graph 7d-report 7d-dashboard 7d-validate guard-artifacts-dir clean-artifacts clean-project reset-empty
 
 help:
 	@echo "Targets:"
 	@echo "  make init                 Install deps, create RAG env, validate and refresh RAG"
 	@echo "  make validate             Compile MCP modules and validate the OKF bundle"
+	@echo "  make test                 Run Python regression tests"
+	@echo "  make smoke                Run fast local validation + tests"
+	@echo "  make e2e                  Run deterministic local E2E checks"
+	@echo "  make quality              Run infrastructure-backed quality checks"
+	@echo "  make live-agent           Print gated live-agent acceptance instructions"
 	@echo "  make indexes              Regenerate OKF index.md files"
 	@echo "  make graph                Generate graph JSON/HTML under artifacts/okf"
 	@echo "  make rag-check            Validate OKF, inspect RAG, refresh local RAG index"
@@ -42,8 +47,40 @@ init:
 	$(MAKE) rag-check
 
 validate:
-	$(PY) -m py_compile okf_mcp/*.py okf_mcp/rag/*.py okf_mcp/rag/ingestion/*.py okf_mcp/rag/retrieval/*.py
+	$(PY) -m py_compile okf_mcp/*.py okf_mcp/rag/*.py okf_mcp/rag/ingestion/*.py okf_mcp/rag/retrieval/*.py okf_mcp/rag/storage/*.py
 	$(PY) -m okf_mcp validate $(BUNDLE)
+
+
+test:
+	$(PY) -m unittest discover -s tests -p 'test_*.py'
+
+smoke: validate 7d-validate test indexes graph
+	$(PY) -m okf_mcp rag inspect --env okf_mcp/rag/.env.example --pretty >/dev/null
+	$(PY) -m okf_mcp rag refresh --env okf_mcp/rag/.env.example --pretty >/dev/null
+	$(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --env okf_mcp/rag/.env.example --limit 3 --pretty >/dev/null
+	RAG_EVALUATION_MODE=always $(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --env okf_mcp/rag/.env.example --answer --limit 3 --pretty >/dev/null
+
+docker-compose-check:
+	docker compose config >/dev/null
+
+e2e: smoke docker-compose-check
+	$(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --env okf_mcp/rag/.env.example --answer --limit 3 --pretty >/dev/null
+	@echo "Deterministic local E2E checks passed. See E2E_TEST_SPEC.md for full profile scope."
+
+quality: docker-compose-check
+	@if [ "$(QUALITY_INFRA)" = "1" ]; then \
+		$(PY) -m okf_mcp rag refresh --mode hybrid --env $(RAG_ENV) --pretty >/dev/null; \
+		RAG_EVALUATION_MODE=always RAG_EVENT_STORAGE_MODE=best-effort $(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --mode hybrid --env $(RAG_ENV) --answer --pretty >/dev/null; \
+	else \
+		RAG_EVALUATION_MODE=always $(PY) -m okf_mcp rag retrieve "$(RAG_QUERY)" --env okf_mcp/rag/.env.example --answer --limit 3 --pretty >/dev/null; \
+		echo "Quality profile ran deterministic local evaluator. Set QUALITY_INFRA=1 with running services for hybrid infra checks."; \
+	fi
+
+live-agent:
+	@test -n "$(LIVE_AGENT_TRANSCRIPT)" || { echo "ERROR: set LIVE_AGENT_TRANSCRIPT to a captured sandbox transcript path"; exit 2; }
+	@test -f "$(LIVE_AGENT_TRANSCRIPT)" || { echo "ERROR: transcript not found: $(LIVE_AGENT_TRANSCRIPT)"; exit 2; }
+	@grep -Eq "sandbox|live-agent|validate" "$(LIVE_AGENT_TRANSCRIPT)" || { echo "ERROR: transcript does not look like a live-agent sandbox acceptance run"; exit 1; }
+	@echo "Live-agent transcript gate passed: $(LIVE_AGENT_TRANSCRIPT)"
 
 rag-check: validate
 	@$(PY) -m okf_mcp rag inspect | $(PY) -c 'import json,sys; d=json.load(sys.stdin); print("RAG corpus: {} concepts, {} bytes -> {}".format(d["concept_count"], d["total_bytes"], d["artifacts_dir"]))'

@@ -62,6 +62,7 @@ Minimum OKF format:
 ```md
 ---
 type: Reference
+status: draft
 ---
 
 Concept body.
@@ -72,6 +73,7 @@ Recommended format in this template:
 ```md
 ---
 type: API Operation
+status: draft
 title: API-042 — Create project
 description: Operation contract for project creation.
 resource: system/API.md#api-042
@@ -89,10 +91,19 @@ owner_document: API.md
 
 Rules:
 
-- `type` is required;
-- `title`, `description`, and `timestamp` are recommended;
-- unknown frontmatter fields are allowed;
-- producer-specific fields must be preserved during editing.
+- `type` is required and must be registered in the 7D type registry; unmapped
+  concept types are validation errors.
+- `status` is required. Allowed values are exactly `draft`, `to-review`,
+  `not-valid`, `valid`, `rejected`, and `accepted`.
+- `status` describes document/artifact review state, not runtime implementation
+  progress.
+- Recommended non-blocking status transitions are `draft` -> `to-review` ->
+  (`valid` or `not-valid`), with `accepted` or `rejected` available for final
+  product/stakeholder disposition. Tools validate only allowed values, not the
+  transition path.
+- `title`, `description`, and `timestamp` are recommended.
+- unknown frontmatter fields are allowed; producer-specific fields must be
+  preserved during editing.
 
 ### 3. 7D process registry
 
@@ -103,7 +114,10 @@ concept frontmatter solely to support 7D.
 
 The 7D stage for a concept is derived from its existing `type` value by a
 separate registry table. The type remains the artifact name and does not embed
-extra stage or ownership metadata.
+extra stage or ownership metadata. Every concept type used in this repository
+must be present in the registry. An unmapped type is a validation error in both
+OKF validation and 7D validation. Missing required lifecycle artifacts are
+reported separately as lifecycle coverage gaps, not as OKF format errors.
 
 Stages are sequential:
 
@@ -119,27 +133,46 @@ Stages are sequential:
 
 Artifact-type registry:
 
-| OKF `type` | 7D stage | R — Responsible | A — Accountable | C — Consulted | I — Informed |
-|---|---|---|---|---|---|
-| Product Brief | Discover | PM | PM | Support / GTM, Tech Lead | Sponsor |
-| Go / No-Go to Design | Discover | PM | Sponsor | Tech Lead, Security, SRE | Support / GTM |
-| PRD | Design | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
-| Architecture & NFR | Design | Tech Lead / Architect | Tech Lead / Architect | SRE, Security, QA | PM |
-| Release Candidate | Develop | Tech Lead / Engineering | Tech Lead | QA, Security, SRE | PM |
-| Test Report | Develop | QA | QA | Tech Lead, PM | SRE |
-| Deployment & Rollback Plan | Deploy | SRE | SRE | Tech Lead, QA, Security | PM |
-| Preview Launch Package | Deploy | PM | PM | QA, Support / GTM, SRE | Sponsor |
-| Usage & Feedback Report | Day-to-day | PM, Support / GTM | PM | SRE, QA, Tech Lead | Sponsor |
-| Improvement Backlog | Day-to-day | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
-| GA Readiness Checklist | Defend | PM | PM | Tech Lead, SRE, QA, Security, Support / GTM | Sponsor |
-| Security & Reliability Approval | Defend | Security, SRE | Security / SRE | Tech Lead, QA | PM, Sponsor |
-| Decommission / Migration Plan | Decommission | PM, Tech Lead, SRE | PM | Security, Support / GTM | Sponsor |
-| Final Shutdown Report | Decommission | PM, SRE | PM | Tech Lead, Security | Sponsor |
+| OKF `type` | 7D stage | Coverage required? | R — Responsible | A — Accountable | C — Consulted | I — Informed |
+|---|---|---|---|---|---|---|
+| Product Brief | Discover | yes | PM | PM | Support / GTM, Tech Lead | Sponsor |
+| Go / No-Go to Design | Discover | yes | PM | Sponsor | Tech Lead, Security, SRE | Support / GTM |
+| PRD | Design | yes | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
+| Architecture & NFR | Design | yes | Tech Lead / Architect | Tech Lead / Architect | SRE, Security, QA | PM |
+| Release Candidate | Develop | yes | Tech Lead / Engineering | Tech Lead | QA, Security, SRE | PM |
+| Test Report | Develop | yes | QA | QA | Tech Lead, PM | SRE |
+| Deployment & Rollback Plan | Deploy | yes | SRE | SRE | Tech Lead, QA, Security | PM |
+| Preview Launch Package | Deploy | yes | PM | PM | QA, Support / GTM, SRE | Sponsor |
+| Usage & Feedback Report | Day-to-day | yes | PM, Support / GTM | PM | SRE, QA, Tech Lead | Sponsor |
+| Improvement Backlog | Day-to-day | yes | PM | PM | Tech Lead, QA, Support / GTM | Sponsor |
+| GA Readiness Checklist | Defend | yes | PM | PM | Tech Lead, SRE, QA, Security, Support / GTM | Sponsor |
+| Security & Reliability Approval | Defend | yes | Security, SRE | Security / SRE | Tech Lead, QA | PM, Sponsor |
+| Decommission / Migration Plan | Decommission | yes | PM, Tech Lead, SRE | PM | Security, Support / GTM | Sponsor |
+| Final Shutdown Report | Decommission | yes | PM, SRE | PM | Tech Lead, Security | Sponsor |
+| Source Document | Discover | no | PM | PM | Tech Lead | Sponsor |
+| Reference | Discover | no | PM | PM | Tech Lead | Sponsor |
+| Glossary Term | Discover | no | PM | PM | Tech Lead | Sponsor |
+| Gap | Discover | no | PM | PM | Tech Lead, QA | Sponsor |
+| Requirement | Design | no | PM | PM | Tech Lead, QA | Sponsor |
+| Function Requirement | Design | no | PM | PM | Tech Lead, QA | Sponsor |
+| User Flow | Design | no | PM | PM | UX, Tech Lead, QA | Sponsor |
+| Business Rule | Design | no | PM | PM | Tech Lead, QA | Sponsor |
+| Access Rule | Design | no | PM | PM | Security, Tech Lead, QA | Sponsor |
+| Data Entity | Design | no | Tech Lead | Tech Lead | PM, QA | Sponsor |
+| API Operation | Design | no | Tech Lead | Tech Lead | PM, QA, Security | Sponsor |
+| UX Screen | Design | no | UX | PM | Tech Lead, QA | Sponsor |
+| UI Component | Design | no | UX | PM | Tech Lead, QA | Sponsor |
+| Architecture Decision | Design | no | Tech Lead / Architect | Tech Lead / Architect | PM, SRE, Security, QA | Sponsor |
+| Traceability Row | Design | no | PM, QA | PM | Tech Lead | Sponsor |
+| Deployment Requirement | Deploy | no | SRE | SRE | Tech Lead, QA, Security | PM, Sponsor |
 
 A feature's 7D progress is derived from the highest-order registered artifact
-type among concepts linked to that feature. If a linked artifact type is absent
-from the registry, the 7D stage for that artifact is unknown and should be
-reported as a gap rather than encoded in extra frontmatter.
+type among concepts linked to that feature. Reports and dashboards distinguish:
+
+- validation errors: missing `type`, missing/invalid `status`, unmapped types,
+  malformed frontmatter, and disallowed 7D-specific frontmatter guidance;
+- lifecycle coverage gaps: required lifecycle artifact types with no matching
+  concept. Optional/support mapped types do not create lifecycle coverage gaps.
 
 The MCP server exposes 7D helper tools over this registry. These tools must read
 normal OKF concepts and derive 7D state from `frontmatter.type` and Markdown
@@ -228,7 +261,7 @@ The `okf_mcp/rag/.env` file must not be committed. An example is stored in:
 okf_mcp/rag/.env.example
 ```
 
-Minimum variables:
+Minimum local corpus variables:
 
 ```dotenv
 RAG_BUNDLE_DIR=okf
@@ -237,10 +270,35 @@ RAG_RETRIEVAL_RESULT_LIMIT=10
 RAG_ANSWER_EVIDENCE_LIMIT=5
 ```
 
+Required infrastructure settings for MCP server startup readiness:
+
+```dotenv
+RAG_CLICKHOUSE_URL=http://clickhouse:8123
+RAG_CLICKHOUSE_USER=default
+RAG_CLICKHOUSE_PASSWORD=
+RAG_CLICKHOUSE_DATABASE=okf_rag
+RAG_CLICKHOUSE_EVENTS_TABLE=rag_events
+RAG_OPENSEARCH_URL=http://opensearch:9200
+RAG_OPENSEARCH_USER=
+RAG_OPENSEARCH_PASSWORD=
+RAG_OPENSEARCH_INDEX=okf-concepts
+RAG_QDRANT_URL=http://qdrant:6333
+RAG_QDRANT_API_KEY=
+RAG_QDRANT_COLLECTION=okf-concepts
+```
+
+Docker Compose uses service-name URLs. Host-side local CLI or server runs must
+override these URLs in an uncommitted `.env` with host-reachable values such as
+`http://127.0.0.1:8123`, `http://127.0.0.1:9200`, and
+`http://127.0.0.1:6333`. Pure OKF commands such as validation, indexing, graph
+generation, and `rag inspect` must not require live infrastructure. MCP server
+startup must fail clearly if ClickHouse `/ping`, OpenSearch `/_cluster/health`,
+or Qdrant `/readyz`/`/collections` is unreachable.
+
 The RAG parser must:
 
 - exclude `index.md` and `log.md`;
-- preserve `concept_id`, `type`, `title`, `description`, `tags`, `requirement_id`, `resource`, and `source_path`;
+- preserve `concept_id`, `type`, `status`, `title`, `description`, `tags`, `requirement_id`, `resource`, and `source_path`;
 - include frontmatter context in searchable chunks;
 - resolve Markdown links between concepts as graph context.
 
@@ -277,6 +335,7 @@ validate_7d
 generate_indexes
 export_source_documents
 build_graph
+rag_readiness
 rag_inspect_corpus
 rag_parse_chunks
 rag_refresh_index

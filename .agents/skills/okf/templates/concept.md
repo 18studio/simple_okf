@@ -1,5 +1,6 @@
 ---
 type: Reference
+status: draft
 title: <Human-readable title>
 description: <One-line summary.>
 resource: <canonical source URI or path>

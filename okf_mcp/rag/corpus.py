@@ -49,6 +49,7 @@ class OKFRagCorpus:
                 concept_id=concept_id,
                 path=rel_path,
                 type=str(fm.get("type") or ""),
+                status=str(fm.get("status") or ""),
                 title=str(fm.get("title") or path.stem),
                 description=str(fm.get("description") or ""),
                 tags=_tags(fm.get("tags")),

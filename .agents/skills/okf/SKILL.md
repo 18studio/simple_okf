@@ -150,6 +150,7 @@ Minimum conformant concept:
 ```md
 ---
 type: Reference
+status: draft
 ---
 
 Concept body.
@@ -160,6 +161,7 @@ Recommended project frontmatter:
 ```yaml
 ---
 type: API Operation
+status: draft
 title: API-042 — Create project
 description: Operation contract for project creation.
 resource: system/API.md#api-042
@@ -173,13 +175,19 @@ owner_document: API.md
 
 Rules:
 
-1. `type` is required.
-2. `title`, `description`, and `timestamp` are recommended.
-3. Unknown frontmatter keys are allowed.
-4. Preserve unknown frontmatter keys when editing existing concepts.
-5. Do not invent fields, citations, source paths, schema details, or
+1. `type` is required and must be mapped in the 7D type registry.
+2. `status` is required. Allowed values are exactly `draft`, `to-review`,
+   `not-valid`, `valid`, `rejected`, and `accepted`.
+3. `status` is document/artifact state, not implementation progress. Status
+   transitions are recommended only, not validation gates: `draft` ->
+   `to-review` -> (`valid` or `not-valid`), then optionally `accepted` or
+   `rejected`.
+4. `title`, `description`, and `timestamp` are recommended.
+5. Unknown frontmatter keys are allowed.
+6. Preserve unknown frontmatter keys when editing existing concepts.
+7. Do not invent fields, citations, source paths, schema details, or
    requirement IDs.
-6. Use `tags` as a list when possible.
+8. Use `tags` as a list when possible.
 
 ## Common concept types
 
@@ -204,8 +212,9 @@ type: Glossary Term
 type: Reference
 ```
 
-Type values are free-form strings. Do not reject a concept only because its
-`type` is unfamiliar.
+Type values are controlled by the 7D registry in `SPEC.md` and
+`okf_mcp/okf.py`. Do not create an unmapped type silently; if no existing mapped
+value fits, report the mapping gap instead of inventing a new taxonomy value.
 
 ## Links as graph
 
@@ -240,8 +249,9 @@ validation. If the correct target is unknown, report the gap.
 
 1. Discover the right location with `list_directory` and `list_concepts`.
 2. Choose a stable concept ID.
-3. Use frontmatter with at least `type`; prefer `title`, `description`,
-   `timestamp`, `tags`, and source fields when supported by evidence.
+3. Use frontmatter with at least mapped `type` and allowed `status`; prefer
+   `title`, `description`, `timestamp`, `tags`, and source fields when supported
+   by evidence.
 4. Write concise Markdown body sections.
 5. Add relative links to related concepts only when there is evidence.
 6. Add citations only when there is a real source.

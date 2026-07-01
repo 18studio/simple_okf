@@ -1,5 +1,6 @@
 ---
 type: UX Screen
+status: draft
 title: First Reasoning UX
 description: UX behavior for the first reasoning chat and completeness checklist.
 tags:

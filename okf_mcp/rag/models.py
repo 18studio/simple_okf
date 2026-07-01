@@ -12,6 +12,7 @@ class OKFConceptDocument:
     concept_id: str
     path: str
     type: str
+    status: str
     title: str
     description: str
     tags: tuple[str, ...]
@@ -55,6 +56,7 @@ class OKFChunkRecord:
     concept_id: str
     path: str
     type: str
+    status: str
     title: str
     description: str
     tags: tuple[str, ...]

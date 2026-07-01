@@ -90,6 +90,7 @@ class OKFConceptParser:
                 context_parts = [
                     f"Concept ID: {concept_id}",
                     f"Type: {document.type}",
+                    f"Status: {document.status}",
                     f"Title: {document.title}",
                 ]
                 if document.description:
@@ -109,6 +110,7 @@ class OKFConceptParser:
                         concept_id=concept_id,
                         path=f"{concept_id}.md",
                         type=document.type,
+                        status=document.status,
                         title=document.title,
                         description=document.description,
                         tags=document.tags,

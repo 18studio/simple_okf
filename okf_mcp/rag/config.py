@@ -24,6 +24,27 @@ class RagSettings:
     artifacts_dir: Path
     retrieval_result_limit: int = 10
     answer_evidence_limit: int = 5
+    clickhouse_url: str = ""
+    clickhouse_user: str = ""
+    clickhouse_password: str = ""
+    clickhouse_database: str = ""
+    clickhouse_events_table: str = ""
+    opensearch_url: str = ""
+    opensearch_user: str = ""
+    opensearch_password: str = ""
+    opensearch_index: str = ""
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
+    qdrant_collection: str = ""
+    retrieval_mode: str = "local"
+    evaluation_mode: str = "disabled"
+    event_storage_mode: str = "disabled"
+    evaluation_threshold: float = 0.5
+    embedding_model: str = "deterministic-hash-v1"
+    embedding_dimensions: int = 64
+    hybrid_keyword_weight: float = 0.5
+    hybrid_semantic_weight: float = 0.5
+    infrastructure_timeout_seconds: float = 10.0
 
 
 def project_root() -> Path:
@@ -103,6 +124,33 @@ def _apply_process_env(values: dict[str, str]) -> dict[str, str]:
     return merged
 
 
+def _str_from_env(values: dict[str, str], key: str, default: str = "") -> str:
+    return values.get(key, default).strip()
+
+
+def _float_from_env(values: dict[str, str], key: str, default: float) -> float:
+    raw = values.get(key)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise RagConfigError(f"{key} must be a number") from exc
+    if value < 0:
+        raise RagConfigError(f"{key} must be non-negative")
+    return value
+
+
+def _choice_from_env(values: dict[str, str], key: str, default: str, choices: set[str]) -> str:
+    value = values.get(key, default).strip().casefold()
+    if not value:
+        value = default
+    if value not in choices:
+        allowed = ", ".join(sorted(choices))
+        raise RagConfigError(f"{key} must be one of: {allowed}")
+    return value
+
+
 def _int_from_env(values: dict[str, str], key: str, default: int) -> int:
     raw = values.get(key)
     if raw is None or not raw.strip():
@@ -116,15 +164,38 @@ def _int_from_env(values: dict[str, str], key: str, default: int) -> int:
     return value
 
 
+def _require_keys(values: dict[str, str], keys: tuple[str, ...], *, reason: str) -> None:
+    missing = [key for key in keys if not values.get(key, "").strip()]
+    if missing:
+        raise RagConfigError(f"{reason} requires: {', '.join(missing)}")
+
+
 def load_settings(env_file: Path | None = None) -> RagSettings:
     root = project_root()
+    explicit_env_file = env_file is not None
     selected_env = (env_file or default_env_file()).resolve()
-    if not selected_env.exists():
+    if selected_env.exists():
+        file_values = _parse_env_file(selected_env)
+    elif explicit_env_file:
         display = selected_env.relative_to(root) if selected_env.is_relative_to(root) else selected_env
         raise RagConfigError(
             f"RAG env file not found: {display}. Create it from okf_mcp/rag/.env.example."
         )
-    values = _apply_process_env(_parse_env_file(selected_env))
+    else:
+        file_values = {}
+    values = _apply_process_env(file_values)
+    retrieval_mode = _choice_from_env(values, "RAG_RETRIEVAL_MODE", "local", {"local", "keyword", "semantic", "hybrid"})
+    event_storage_mode = _choice_from_env(values, "RAG_EVENT_STORAGE_MODE", "disabled", {"disabled", "best-effort", "required"})
+    if retrieval_mode in {"keyword", "hybrid"}:
+        _require_keys(values, ("RAG_OPENSEARCH_URL", "RAG_OPENSEARCH_INDEX"), reason=f"RAG_RETRIEVAL_MODE={retrieval_mode}")
+    if retrieval_mode in {"semantic", "hybrid"}:
+        _require_keys(values, ("RAG_QDRANT_URL", "RAG_QDRANT_COLLECTION"), reason=f"RAG_RETRIEVAL_MODE={retrieval_mode}")
+    if event_storage_mode != "disabled":
+        _require_keys(
+            values,
+            ("RAG_CLICKHOUSE_URL", "RAG_CLICKHOUSE_DATABASE", "RAG_CLICKHOUSE_EVENTS_TABLE"),
+            reason=f"RAG_EVENT_STORAGE_MODE={event_storage_mode}",
+        )
     bundle_dir = _path_from_env(root, values, "RAG_BUNDLE_DIR", "okf")
     artifacts_dir = _rag_artifacts_dir_from_env(root, values)
     if not bundle_dir.is_dir():
@@ -137,4 +208,25 @@ def load_settings(env_file: Path | None = None) -> RagSettings:
         artifacts_dir=artifacts_dir,
         retrieval_result_limit=_int_from_env(values, "RAG_RETRIEVAL_RESULT_LIMIT", 10),
         answer_evidence_limit=_int_from_env(values, "RAG_ANSWER_EVIDENCE_LIMIT", 5),
+        clickhouse_url=_str_from_env(values, "RAG_CLICKHOUSE_URL"),
+        clickhouse_user=_str_from_env(values, "RAG_CLICKHOUSE_USER"),
+        clickhouse_password=_str_from_env(values, "RAG_CLICKHOUSE_PASSWORD"),
+        clickhouse_database=_str_from_env(values, "RAG_CLICKHOUSE_DATABASE"),
+        clickhouse_events_table=_str_from_env(values, "RAG_CLICKHOUSE_EVENTS_TABLE"),
+        opensearch_url=_str_from_env(values, "RAG_OPENSEARCH_URL"),
+        opensearch_user=_str_from_env(values, "RAG_OPENSEARCH_USER"),
+        opensearch_password=_str_from_env(values, "RAG_OPENSEARCH_PASSWORD"),
+        opensearch_index=_str_from_env(values, "RAG_OPENSEARCH_INDEX"),
+        qdrant_url=_str_from_env(values, "RAG_QDRANT_URL"),
+        qdrant_api_key=_str_from_env(values, "RAG_QDRANT_API_KEY"),
+        qdrant_collection=_str_from_env(values, "RAG_QDRANT_COLLECTION"),
+        retrieval_mode=retrieval_mode,
+        evaluation_mode=_choice_from_env(values, "RAG_EVALUATION_MODE", "disabled", {"disabled", "sample", "always", "fail-on-threshold"}),
+        event_storage_mode=event_storage_mode,
+        evaluation_threshold=_float_from_env(values, "RAG_EVALUATION_THRESHOLD", 0.5),
+        embedding_model=_str_from_env(values, "RAG_EMBEDDING_MODEL", "deterministic-hash-v1") or "deterministic-hash-v1",
+        embedding_dimensions=_int_from_env(values, "RAG_EMBEDDING_DIMENSIONS", 64),
+        hybrid_keyword_weight=_float_from_env(values, "RAG_HYBRID_KEYWORD_WEIGHT", 0.5),
+        hybrid_semantic_weight=_float_from_env(values, "RAG_HYBRID_SEMANTIC_WEIGHT", 0.5),
+        infrastructure_timeout_seconds=_float_from_env(values, "RAG_INFRASTRUCTURE_TIMEOUT_SECONDS", 10.0),
     )

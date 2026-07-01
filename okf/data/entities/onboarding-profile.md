@@ -1,5 +1,6 @@
 ---
 type: Data Entity
+status: draft
 title: Onboarding Profile
 description: Minimum user profile captured during the first reasoning onboarding flow.
 tags:

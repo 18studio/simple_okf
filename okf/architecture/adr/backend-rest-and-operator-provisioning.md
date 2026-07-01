@@ -1,5 +1,6 @@
 ---
 type: Architecture Decision
+status: draft
 title: Backend REST API and Kubernetes Operator Provisioning
 description: Architecture decision for UI-backend communication and deferred user-environment
   provisioning.

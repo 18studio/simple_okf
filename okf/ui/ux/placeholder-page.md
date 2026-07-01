@@ -1,5 +1,6 @@
 ---
 type: UI Component
+status: draft
 title: Placeholder Page
 description: Simple placeholder behavior for pages without implementation and approved
   documentation.

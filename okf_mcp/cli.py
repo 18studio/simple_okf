@@ -10,7 +10,7 @@ from typing import Any, Callable, Sequence
 from uuid import uuid4
 
 from .okf import OKFBundle, OKFError
-from .rag import LocalOKFRetriever, OKFRagCorpus, RagConfigError, load_settings
+from .rag import OKFRagRetriever, OKFRagCorpus, RagConfigError, RagReadinessError, check_rag_readiness, load_settings
 
 DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
 
@@ -136,10 +136,10 @@ def rag_inspect(*, env: str | None = None, pretty: bool = False) -> int:
     return 0
 
 
-def rag_refresh(*, env: str | None = None, pretty: bool = False) -> int:
+def rag_refresh(*, env: str | None = None, mode: str | None = None, pretty: bool = False) -> int:
     try:
         settings = load_settings(Path(env) if env else None)
-        payload = LocalOKFRetriever(settings.bundle_dir).refresh_index(settings.artifacts_dir)
+        payload = OKFRagRetriever(settings).refresh_index(settings.artifacts_dir, mode=mode)
     except (RagConfigError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -155,19 +155,21 @@ def rag_retrieve(
     type_filter: str | None = None,
     tag: str | None = None,
     answer: bool = False,
+    mode: str | None = None,
     pretty: bool = False,
 ) -> int:
     try:
         settings = load_settings(Path(env) if env else None)
-        retriever = LocalOKFRetriever(settings.bundle_dir)
+        retriever = OKFRagRetriever(settings)
         if answer:
-            payload = retriever.answer(query, limit=limit or settings.answer_evidence_limit)
+            payload = retriever.answer(query, limit=limit or settings.answer_evidence_limit, mode=mode)
         else:
             payload = retriever.retrieve(
                 query,
                 limit=limit or settings.retrieval_result_limit,
                 type_filter=type_filter,
                 tag=tag,
+                mode=mode,
             )
     except (RagConfigError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -191,12 +193,19 @@ def render_7d_validation(payload: dict[str, Any]) -> str:
         "",
         f"Status: {'OK' if payload.get('ok') else 'FAILED'}",
         f"Mapped artifact concepts: {payload.get('mapped_concept_count', 0)}",
+        f"Unmapped concepts: {payload.get('unmapped_concept_count', 0)}",
         f"Registered artifact types: {payload.get('registered_artifact_type_count', 0)}",
+        f"Required lifecycle artifact types: {payload.get('required_artifact_type_count', 0)}",
         f"Stages: {payload.get('stage_count', 0)}",
         "",
     ]
     if payload.get("errors"):
         lines += ["## Errors", ""] + [f"- {item}" for item in payload["errors"]] + [""]
+    if payload.get("unmapped_concepts"):
+        lines += ["## Unmapped concepts", ""]
+        for item in payload["unmapped_concepts"]:
+            lines.append(f"- `{item['path']}` — `{item['type']}`")
+        lines.append("")
     if payload.get("warnings"):
         lines += ["## Warnings", ""] + [f"- {item}" for item in payload["warnings"]] + [""]
     return "\n".join(lines).rstrip() + "\n"
@@ -274,7 +283,7 @@ def seven_d_validate(*, bundle_path: str = "okf", as_json: bool = False) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     _print_payload(payload, as_json, render_7d_validation)
-    return 0
+    return 0 if payload.get("ok") else 1
 
 
 def seven_d_registry(*, bundle_path: str = "okf", as_json: bool = False) -> int:
@@ -390,7 +399,8 @@ def build_parser() -> argparse.ArgumentParser:
     rag_refresh_parser = rag_sub.add_parser("refresh", help="Refresh local OKF RAG index")
     rag_refresh_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     rag_refresh_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    rag_refresh_parser.set_defaults(handler=lambda args: rag_refresh(env=args.env, pretty=args.pretty))
+    rag_refresh_parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
+    rag_refresh_parser.set_defaults(handler=lambda args: rag_refresh(env=args.env, mode=args.mode, pretty=args.pretty))
 
     rag_retrieve_parser = rag_sub.add_parser("retrieve", help="Retrieve OKF RAG chunks")
     rag_retrieve_parser.add_argument("query")
@@ -399,6 +409,7 @@ def build_parser() -> argparse.ArgumentParser:
     rag_retrieve_parser.add_argument("--type-filter", default=None)
     rag_retrieve_parser.add_argument("--tag", default=None)
     rag_retrieve_parser.add_argument("--answer", action="store_true", help="Return extractive answer instead of raw hits")
+    rag_retrieve_parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
     rag_retrieve_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     rag_retrieve_parser.set_defaults(
         handler=lambda args: rag_retrieve(
@@ -408,6 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
             type_filter=args.type_filter,
             tag=args.tag,
             answer=args.answer,
+            mode=args.mode,
             pretty=args.pretty,
         )
     )
@@ -419,6 +431,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_server(args: argparse.Namespace) -> int:
+    try:
+        settings = load_settings()
+        readiness = check_rag_readiness(settings)
+    except (RagConfigError, RagReadinessError) as exc:
+        print(f"ERROR: MCP startup readiness failed: {exc}", file=sys.stderr)
+        return 2
+    print(
+        "RAG infrastructure readiness OK: "
+        + ", ".join(str(item.get("name")) for item in readiness.get("probes", [])),
+        file=sys.stderr,
+    )
     create_mcp = _load_create_mcp()
     mcp = create_mcp(args.bundle)
     if args.transport == "stdio":
@@ -498,8 +521,9 @@ def rag_refresh_main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh local OKF RAG index")
     parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+    parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
     args = parser.parse_args(argv)
-    return rag_refresh(env=args.env, pretty=args.pretty)
+    return rag_refresh(env=args.env, mode=args.mode, pretty=args.pretty)
 
 
 def rag_retrieve_main(argv: Sequence[str] | None = None) -> int:
@@ -510,6 +534,7 @@ def rag_retrieve_main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--type-filter", default=None)
     parser.add_argument("--tag", default=None)
     parser.add_argument("--answer", action="store_true", help="Return extractive answer instead of raw hits")
+    parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     args = parser.parse_args(argv)
     return rag_retrieve(
@@ -519,6 +544,7 @@ def rag_retrieve_main(argv: Sequence[str] | None = None) -> int:
         type_filter=args.type_filter,
         tag=args.tag,
         answer=args.answer,
+        mode=args.mode,
         pretty=args.pretty,
     )
 

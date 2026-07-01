@@ -1,5 +1,6 @@
 ---
 type: Data Entity
+status: draft
 title: ENT-000 — <Entity name>
 description: <Entity summary.>
 resource: system/DATA_SCHEMA.md#ent-000

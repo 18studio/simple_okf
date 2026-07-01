@@ -39,7 +39,13 @@ same rule in a secondary location.
 
 - Each concept is one Markdown file under `okf/` with YAML frontmatter.
 - `index.md` and `log.md` are support files, not concepts.
-- The minimum required concept frontmatter key is `type`.
+- Required concept frontmatter keys are `type` and `status`.
+- Allowed `status` values are exactly `draft`, `to-review`, `not-valid`,
+  `valid`, `rejected`, and `accepted`.
+- `status` describes document/artifact state, not implementation progress.
+  Recommended transitions are non-blocking guidance only: `draft` ->
+  `to-review` -> (`valid` or `not-valid`), then optionally `accepted` or
+  `rejected`.
 - Recommended keys are `title`, `description`, and `timestamp`.
 - Preserve unknown frontmatter fields when editing existing concepts.
 - Write OKF concept and support documentation in English. Before creating or
@@ -70,8 +76,10 @@ OKF concept format.
   `Architecture & NFR`, or `Test Report`.
 - Resolve 7D stage and responsibility from the registry table in `SPEC.md` or
   the MCP 7D tools, not from per-concept 7D metadata.
-- Derive a feature's 7D progress from linked artifact concepts and their types;
-  if the type is not in the registry, report a gap.
+- Derive a feature's 7D progress from linked artifact concepts and their types.
+- Every concept `type` must be mapped in the registry; an unmapped type is a
+  validation error. Missing required lifecycle artifacts are 7D coverage gaps,
+  not OKF format errors.
 - Keep 7D behavior out of `.agents/skills/okf/SKILL.md`; use the dedicated
   `.agents/skills/7d/SKILL.md` workflow for 7D operations while keeping
   `SPEC.md` as the repository-level source for 7D rules.
@@ -119,11 +127,14 @@ not define canonical knowledge by itself.
 
 - The local RAG environment file is `okf_mcp/rag/.env`.
 - The committed example is `okf_mcp/rag/.env.example`.
+- MCP server startup requires reachable ClickHouse, OpenSearch, and Qdrant
+  endpoints from RAG settings. Pure OKF validation/index/graph commands and
+  `rag inspect` must not require live infrastructure.
 - Default RAG artifacts belong under `artifacts/rag/`.
 - RAG tools must treat OKF concepts as the corpus and exclude `index.md` and
   `log.md`.
-- RAG parser output must preserve `concept_id`, `type`, `title`, `description`,
-  `tags`, `requirement_id`, `resource`, and `source_path` when present.
+- RAG parser output must preserve `concept_id`, `type`, `status`, `title`,
+  `description`, `tags`, `requirement_id`, `resource`, and `source_path` when present.
 - RAG answers must cite OKF concepts and line ranges when evidence is available.
 - Do not treat RAG search results as more authoritative than the source concept
   files.

@@ -11,6 +11,7 @@ from typing import Any, Iterable
 import yaml
 
 SUPPORT_FILES = {"index.md", "log.md"}
+ALLOWED_CONCEPT_STATUSES = ("draft", "to-review", "not-valid", "valid", "rejected", "accepted")
 RECOMMENDED_KEYS = ("title", "description", "timestamp")
 _FRONTMATTER_DELIM = "---"
 _CONCEPT_SEGMENT_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -174,6 +175,169 @@ SEVEN_D_ARTIFACT_TYPE_REGISTRY: tuple[dict[str, Any], ...] = (
         "consulted": ["Tech Lead", "Security"],
         "informed": ["Sponsor"],
     },
+    {
+        "type": "Source Document",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Reference",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Glossary Term",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Gap",
+        "stage": "discover",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Requirement",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Function Requirement",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "User Flow",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["UX", "Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Business Rule",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Access Rule",
+        "stage": "design",
+        "responsible": ["PM"],
+        "accountable": "PM",
+        "consulted": ["Security", "Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Data Entity",
+        "stage": "design",
+        "responsible": ["Tech Lead"],
+        "accountable": "Tech Lead",
+        "consulted": ["PM", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "API Operation",
+        "stage": "design",
+        "responsible": ["Tech Lead"],
+        "accountable": "Tech Lead",
+        "consulted": ["PM", "QA", "Security"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "UX Screen",
+        "stage": "design",
+        "responsible": ["UX"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "UI Component",
+        "stage": "design",
+        "responsible": ["UX"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Architecture Decision",
+        "stage": "design",
+        "responsible": ["Tech Lead / Architect"],
+        "accountable": "Tech Lead / Architect",
+        "consulted": ["PM", "SRE", "Security", "QA"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Traceability Row",
+        "stage": "design",
+        "responsible": ["PM", "QA"],
+        "accountable": "PM",
+        "consulted": ["Tech Lead"],
+        "informed": ["Sponsor"],
+        "coverage_required": False,
+    },
+    {
+        "type": "Deployment Requirement",
+        "stage": "deploy",
+        "responsible": ["SRE"],
+        "accountable": "SRE",
+        "consulted": ["Tech Lead", "QA", "Security"],
+        "informed": ["PM", "Sponsor"],
+        "coverage_required": False,
+    },
+)
+
+_REQUIRED_SEVEN_D_ARTIFACT_TYPES = frozenset(
+    {
+        "Product Brief",
+        "Go / No-Go to Design",
+        "PRD",
+        "Architecture & NFR",
+        "Release Candidate",
+        "Test Report",
+        "Deployment & Rollback Plan",
+        "Preview Launch Package",
+        "Usage & Feedback Report",
+        "Improvement Backlog",
+        "GA Readiness Checklist",
+        "Security & Reliability Approval",
+        "Decommission / Migration Plan",
+        "Final Shutdown Report",
+    }
 )
 
 _SEVEN_D_STAGE_BY_KEY = {stage["key"]: stage for stage in SEVEN_D_STAGES}
@@ -272,16 +436,42 @@ def _safe_frontmatter(frontmatter: dict[str, Any]) -> dict[str, Any]:
     return {str(k): _jsonable(v) for k, v in frontmatter.items()}
 
 
+def _seven_d_registry_item(item: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(item)
+    enriched.setdefault("coverage_required", str(enriched.get("type") or "") in _REQUIRED_SEVEN_D_ARTIFACT_TYPES)
+    return enriched
+
+
 def _seven_d_mapping_for_type(type_name: str) -> dict[str, Any] | None:
     item = _SEVEN_D_TYPE_BY_NAME.get(type_name.strip().casefold())
     if not item:
         return None
-    mapping = {str(key): _jsonable(value) for key, value in item.items()}
+    enriched = _seven_d_registry_item(item)
+    mapping = {str(key): _jsonable(value) for key, value in enriched.items()}
     stage = _SEVEN_D_STAGE_BY_KEY.get(str(item["stage"]))
     if stage:
         mapping["stage_name"] = stage["name"]
         mapping["stage_order"] = stage["order"]
     return mapping
+
+
+def _validate_concept_frontmatter(frontmatter: dict[str, Any], rel: str) -> list[str]:
+    errors: list[str] = []
+    type_value = frontmatter.get("type")
+    type_name = str(type_value or "").strip()
+    if not type_name:
+        errors.append(f"{rel}: missing required frontmatter key `type`")
+    elif not _seven_d_mapping_for_type(type_name):
+        errors.append(f"{rel}: unmapped concept type `{type_name}` is not registered in the 7D type registry")
+
+    status_value = frontmatter.get("status")
+    status = str(status_value or "").strip()
+    if not status:
+        errors.append(f"{rel}: missing required frontmatter key `status`")
+    elif status not in ALLOWED_CONCEPT_STATUSES:
+        allowed = ", ".join(ALLOWED_CONCEPT_STATUSES)
+        errors.append(f"{rel}: invalid status `{status}`; expected one of: {allowed}")
+    return errors
 
 
 def _seven_d_stage_key(stage: str) -> str:
@@ -491,7 +681,7 @@ def _render_graph_html(graph: dict[str, Any]) -> str:
     }}
 
     function textOf(node) {{
-      return [node.id, node.path, node.type, node.title, node.description, (node.tags || []).join(' ')].join(' ').toLowerCase();
+      return [node.id, node.path, node.type, node.status, node.title, node.description, (node.tags || []).join(' ')].join(' ').toLowerCase();
     }}
 
     function visibleNodes() {{
@@ -564,6 +754,7 @@ def _render_graph_html(graph: dict[str, Any]) -> str:
         ['ID', node.id],
         ['Path', node.path || ''],
         ['Type', node.type || 'Concept'],
+        ['Status', node.status || ''],
         ['Description', node.description || ''],
         ['Tags', tags],
         ['Outgoing links', out.map(edge => edge.target).join('\n') || '—'],
@@ -760,6 +951,7 @@ class OKFBundle:
             "frontmatter": _safe_frontmatter(doc.frontmatter),
             "title": str(doc.frontmatter.get("title") or path.stem),
             "type": str(doc.frontmatter.get("type") or ""),
+            "status": str(doc.frontmatter.get("status") or ""),
             "description": str(doc.frontmatter.get("description") or ""),
         }
         if include_body:
@@ -821,6 +1013,7 @@ class OKFBundle:
                 "id": cid,
                 "path": path.relative_to(self.root).as_posix(),
                 "type": typ,
+                "status": str(fm.get("status") or ""),
                 "title": title,
                 "description": desc,
                 "tags": tags,
@@ -858,7 +1051,7 @@ class OKFBundle:
         """Return the static 7D stage and artifact-type mapping registry."""
         return {
             "stages": [_safe_frontmatter(dict(item)) for item in SEVEN_D_STAGES],
-            "artifact_types": [_safe_frontmatter(dict(item)) for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY],
+            "artifact_types": [_safe_frontmatter(_seven_d_registry_item(dict(item))) for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY],
         }
 
     def seven_d_mapping_for_type(self, type_name: str) -> dict[str, Any] | None:
@@ -918,16 +1111,13 @@ class OKFBundle:
             artifact_types = artifact_types_by_stage.get(key, [])
             concepts = concepts_by_stage.get(key, [])
             present_types = {str(item.get("type") or "") for item in concepts}
-            registered_types = {str(item.get("type") or "") for item in artifact_types}
+            required_types = {
+                str(item.get("type") or "")
+                for item in artifact_types
+                if bool(item.get("coverage_required", True))
+            }
             gaps: list[dict[str, Any]] = []
-            if not concepts:
-                gaps.append(
-                    {
-                        "kind": "stage_empty",
-                        "message": "No OKF concepts with registered 7D artifact types are mapped to this stage.",
-                    }
-                )
-            missing_types = sorted(registered_types - present_types)
+            missing_types = sorted(required_types - present_types)
             for type_name in missing_types:
                 gaps.append(
                     {
@@ -1221,6 +1411,7 @@ class OKFBundle:
           ${{row('Path', concept.path)}}
           ${{row('Stage', seven.stage_name || concept.stage.name)}}
           ${{row('Type', concept.type)}}
+          ${{row('Status', concept.status)}}
           ${{row('Tags', (concept.tags || []).join(', '))}}
           ${{row('Resource', concept.resource)}}
           ${{row('Responsible', (seven.responsible || []).join(', '))}}
@@ -1359,6 +1550,8 @@ class OKFBundle:
         errors: list[str] = []
         warnings: list[str] = []
         mapped_count = 0
+        unmapped_concepts: list[dict[str, str]] = []
+        unmapped_types: set[str] = set()
 
         stage_keys = {str(item["key"]) for item in SEVEN_D_STAGES}
         for item in SEVEN_D_ARTIFACT_TYPE_REGISTRY:
@@ -1375,9 +1568,24 @@ class OKFBundle:
             except OKFError as exc:
                 errors.append(f"{rel}: {exc}")
                 continue
-            typ = str(doc.frontmatter.get("type") or "")
-            if _seven_d_mapping_for_type(typ):
+            frontmatter_errors = _validate_concept_frontmatter(doc.frontmatter, rel)
+            errors.extend(frontmatter_errors)
+
+            typ = str(doc.frontmatter.get("type") or "").strip()
+            mapping = _seven_d_mapping_for_type(typ) if typ else None
+            if mapping:
                 mapped_count += 1
+            else:
+                display_type = typ or "<missing>"
+                unmapped_types.add(display_type)
+                unmapped_concepts.append(
+                    {
+                        "id": self.path_to_concept_id(path),
+                        "path": rel,
+                        "type": display_type,
+                        "title": str(doc.frontmatter.get("title") or path.stem),
+                    }
+                )
             disallowed = sorted(key for key in _SEVEN_D_FRONTMATTER_KEYS if key in doc.frontmatter)
             if disallowed:
                 warnings.append(
@@ -1388,7 +1596,11 @@ class OKFBundle:
         return {
             "bundle": str(self.root),
             "mapped_concept_count": mapped_count,
+            "unmapped_concept_count": len(unmapped_concepts),
+            "unmapped_types": sorted(unmapped_types),
+            "unmapped_concepts": sorted(unmapped_concepts, key=lambda item: item["path"]),
             "registered_artifact_type_count": len(SEVEN_D_ARTIFACT_TYPE_REGISTRY),
+            "required_artifact_type_count": len(_REQUIRED_SEVEN_D_ARTIFACT_TYPES),
             "stage_count": len(SEVEN_D_STAGES),
             "errors": errors,
             "warnings": warnings,
@@ -1439,8 +1651,6 @@ class OKFBundle:
     ) -> dict[str, Any]:
         if not isinstance(frontmatter, dict):
             raise OKFError("frontmatter must be an object")
-        if not frontmatter.get("type"):
-            raise OKFError("frontmatter.type is required")
         if not isinstance(body, str):
             raise OKFError("body must be a string")
 
@@ -1455,6 +1665,9 @@ class OKFBundle:
             existing.update(fm)
             fm = existing
         fm.setdefault("timestamp", utc_now_iso())
+        validation_errors = _validate_concept_frontmatter(fm, path.relative_to(self.root).as_posix())
+        if validation_errors:
+            raise OKFError("; ".join(validation_errors))
 
         doc = OKFDocument(frontmatter=fm, body=body)
         text = doc.serialize()
@@ -1489,6 +1702,7 @@ class OKFBundle:
                 "id": self.path_to_concept_id(path),
                 "path": path.relative_to(self.root).as_posix(),
                 "type": fm.get("type", ""),
+                "status": fm.get("status", ""),
                 "title": fm.get("title", path.stem),
                 "description": fm.get("description", ""),
                 "tags": fm.get("tags", []),
@@ -1656,6 +1870,7 @@ class OKFBundle:
                     "resource": rel_source,
                     "tags": ["source-document"],
                     "timestamp": utc_now_iso(),
+                    "status": "draft",
                     "source_path": rel_source,
                     "owner_document": source_file.name,
                 },
@@ -1693,8 +1908,7 @@ class OKFBundle:
                 except OKFError as exc:
                     errors.append(f"{rel}: {exc}")
                     doc = OKFDocument()
-                if "type" not in doc.frontmatter:
-                    errors.append(f"{rel}: missing required frontmatter key `type`")
+                errors.extend(_validate_concept_frontmatter(doc.frontmatter, rel))
                 for key in RECOMMENDED_KEYS:
                     if key not in doc.frontmatter:
                         warnings.append(f"{rel}: missing recommended frontmatter key `{key}`")

@@ -10,7 +10,7 @@ from fastmcp import FastMCP
 if __package__:
     from . import __version__
     from .okf import OKFBundle
-    from .rag import LocalOKFRetriever, OKFRagCorpus, load_settings
+    from .rag import OKFRagRetriever, OKFRagCorpus, check_rag_readiness, load_settings
 else:  # Allows running this file directly.
     import sys
 
@@ -21,7 +21,7 @@ else:  # Allows running this file directly.
 
     from okf_mcp import __version__
     from okf_mcp.okf import OKFBundle
-    from okf_mcp.rag import LocalOKFRetriever, OKFRagCorpus, load_settings
+    from okf_mcp.rag import OKFRagRetriever, OKFRagCorpus, check_rag_readiness, load_settings
 
 DEFAULT_BUNDLE = os.environ.get("OKF_BUNDLE", "okf")
 
@@ -134,7 +134,8 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
     ) -> dict[str, Any]:
         """Write an OKF concept Markdown file.
 
-        `frontmatter.type` is required. If `merge_frontmatter` is true and the
+        `frontmatter.type` and `frontmatter.status` are required and `type` must
+        be mapped in the 7D registry. If `merge_frontmatter` is true and the
         concept already exists, omitted existing keys are preserved while passed
         keys are updated. `timestamp` is filled automatically when omitted.
         """
@@ -258,9 +259,15 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
             graph["html_report"] = bundle.write_graph_html(html_out_path, graph=graph_for_html)
         return graph
 
-    def _rag_settings_and_retriever() -> tuple[Any, LocalOKFRetriever]:
+    def _rag_settings_and_retriever() -> tuple[Any, OKFRagRetriever]:
         settings = load_settings()
-        return settings, LocalOKFRetriever(settings.bundle_dir)
+        return settings, OKFRagRetriever(settings)
+
+    @mcp.tool
+    def rag_readiness(timeout_seconds: float = 2.0) -> dict[str, Any]:
+        """Check configured ClickHouse, OpenSearch, and Qdrant readiness."""
+        settings = load_settings()
+        return check_rag_readiness(settings, timeout=timeout_seconds)
 
     @mcp.tool
     def rag_inspect_corpus(correlation_id: str | None = None) -> dict[str, Any]:
@@ -290,10 +297,10 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         }
 
     @mcp.tool
-    def rag_refresh_index() -> dict[str, Any]:
-        """Write a local JSON index artifact for the configured OKF RAG corpus."""
+    def rag_refresh_index(mode: str | None = None) -> dict[str, Any]:
+        """Write local and optional infrastructure indexes for the configured OKF RAG corpus."""
         settings, retriever = _rag_settings_and_retriever()
-        return retriever.refresh_index(settings.artifacts_dir)
+        return retriever.refresh_index(settings.artifacts_dir, mode=mode)
 
     @mcp.tool
     def rag_retrieve(
@@ -301,21 +308,23 @@ def create_mcp(bundle_root: str | Path = DEFAULT_BUNDLE) -> FastMCP:
         limit: int | None = None,
         type_filter: str | None = None,
         tag: str | None = None,
+        mode: str | None = None,
     ) -> dict[str, Any]:
-        """Retrieve OKF concepts/chunks with local metadata-aware search."""
+        """Retrieve OKF concepts/chunks with local, keyword, semantic, or hybrid search."""
         settings, retriever = _rag_settings_and_retriever()
         return retriever.retrieve(
             query,
             limit=limit or settings.retrieval_result_limit,
             type_filter=type_filter,
             tag=tag,
+            mode=mode,
         )
 
     @mcp.tool
-    def rag_answer(question: str, limit: int | None = None) -> dict[str, Any]:
-        """Return a deterministic extractive answer with OKF citations."""
+    def rag_answer(question: str, limit: int | None = None, mode: str | None = None) -> dict[str, Any]:
+        """Return a deterministic extractive answer with OKF citations and optional evaluation."""
         settings, retriever = _rag_settings_and_retriever()
-        return retriever.answer(question, limit=limit or settings.answer_evidence_limit)
+        return retriever.answer(question, limit=limit or settings.answer_evidence_limit, mode=mode)
 
     @mcp.tool
     def rag_get_source(
@@ -362,7 +371,9 @@ Workflow:
 4. Call generate_indexes(), build_graph(write=True, html=True), and validate_bundle() after file changes.
 
 Rules:
-- frontmatter.type is required.
+- frontmatter.type and frontmatter.status are required.
+- Use only allowed status values: draft, to-review, not-valid, valid, rejected, accepted.
+- Use a type mapped by the 7D registry; do not add 7D-specific frontmatter.
 - Prefer title, description, timestamp, tags, resource when supported by evidence.
 - Use relative Markdown links for internal OKF links.
 - Do not invent domain facts, citations, schema details, or requirement IDs.

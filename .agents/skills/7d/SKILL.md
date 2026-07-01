@@ -25,9 +25,13 @@ OKF concept format. The canonical rules are in `SPEC.md`, `AGENTS.md`, and the
    Check`, `Role`, or `Decision Gate` when the real artifact type is known.
 4. Resolve stage and RACI responsibility from the registry, not from per-concept
    metadata.
-5. Derive feature progress from linked artifact concepts and their types. If a
-   linked artifact type is not registered, report it as a gap.
-6. When creating or editing OKF concepts, also load and follow the `okf` skill.
+5. Derive feature progress from linked artifact concepts and their types.
+6. Every OKF concept type must be registered. An unmapped type is a validation
+   error; missing required lifecycle artifacts are static-analysis coverage gaps.
+7. OKF concepts also require `status`. Allowed values are `draft`, `to-review`,
+   `not-valid`, `valid`, `rejected`, and `accepted`; status is document/artifact
+   state, not implementation progress, and transitions are recommended only.
+8. When creating or editing OKF concepts, also load and follow the `okf` skill.
 
 ## Preferred MCP tools
 
@@ -111,18 +115,21 @@ A stage report should include:
 2. all seven stages in order;
 3. registered artifact types for each stage;
 4. actual OKF concepts found for each stage;
-5. explicit gaps for stages with no matching artifacts;
-6. warnings/errors from `validate_7d()`.
+5. explicit static-analysis gaps for missing required lifecycle artifacts;
+6. unmapped type validation errors, if any;
+7. warnings/errors from `validate_7d()`.
 
 Do not treat missing 7D artifacts as OKF validation errors. They are lifecycle
-coverage gaps unless the user defines a stricter gate.
+coverage gaps unless the user defines a stricter gate. Do treat unmapped concept
+`type` values as validation errors.
 
 ## Creating lifecycle artifacts
 
 When the user asks to create or update 7D artifacts:
 
 1. Identify the correct registered artifact type.
-2. Use that value as normal OKF frontmatter `type`.
+2. Use that value as normal OKF frontmatter `type` and set an allowed `status`
+   such as `draft` for a new artifact.
 3. Place the concept in an appropriate OKF directory based on content, not on
    the 7D stage name alone.
 4. Link the artifact to the feature or related concepts using relative Markdown

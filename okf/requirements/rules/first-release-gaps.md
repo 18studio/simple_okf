@@ -1,5 +1,6 @@
 ---
 type: Gap
+status: draft
 title: First Release Gaps
 description: Open questions and deferred product areas discovered during first-release
   planning.

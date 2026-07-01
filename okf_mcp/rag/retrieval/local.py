@@ -200,6 +200,7 @@ class LocalOKFRetriever:
             "path": chunk.path,
             "title": chunk.title,
             "type": chunk.type,
+            "status": chunk.status,
             "description": chunk.description,
             "requirement_id": chunk.requirement_id or "",
             "resource": chunk.resource or "",

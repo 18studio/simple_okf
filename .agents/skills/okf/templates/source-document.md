@@ -1,5 +1,6 @@
 ---
 type: Source Document
+status: draft
 title: <Document title>
 description: Canonical source document exported to OKF.
 resource: system/<DOCUMENT>.md

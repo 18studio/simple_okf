@@ -1,5 +1,6 @@
 ---
 type: Function Requirement
+status: draft
 title: First Reasoning Analytics
 description: Analytics events and metrics for the first reasoning onboarding flow.
 tags:

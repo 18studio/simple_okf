@@ -1,5 +1,6 @@
 ---
 type: API Operation
+status: draft
 title: API-000 — <Operation name>
 description: <Operation contract summary.>
 resource: system/API.md#api-000
