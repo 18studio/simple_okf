@@ -4,6 +4,8 @@ import contextlib
 import io
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -63,6 +65,81 @@ class RagContractTests(unittest.TestCase):
             self.assertEqual(result["mode"], "local")
             self.assertGreaterEqual(len(result["hits"]), 1)
             self.assertEqual(result["event_storage"]["status"], "disabled")
+
+    def test_cli_rag_inspect_refresh_and_retrieve_are_infra_free(self) -> None:
+        tmp, _root, env = self._bundle()
+        with tmp:
+            inspect = subprocess.run(
+                [sys.executable, "-m", "okf_mcp", "rag", "inspect", "--env", str(env), "--pretty"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(inspect.returncode, 0, inspect.stderr)
+            self.assertIn('"concept_count": 1', inspect.stdout)
+
+            refresh = subprocess.run(
+                [sys.executable, "-m", "okf_mcp", "rag", "refresh", "--env", str(env), "--pretty"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(refresh.returncode, 0, refresh.stderr)
+            self.assertIn('"mode": "local"', refresh.stdout)
+
+            retrieve = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "okf_mcp",
+                    "rag",
+                    "retrieve",
+                    "search",
+                    "--env",
+                    str(env),
+                    "--limit",
+                    "3",
+                    "--pretty",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(retrieve.returncode, 0, retrieve.stderr)
+            self.assertIn('"mode": "local"', retrieve.stdout)
+            self.assertIn('"hits": [', retrieve.stdout)
+
+            answer = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "okf_mcp",
+                    "rag",
+                    "retrieve",
+                    "search",
+                    "--env",
+                    str(env),
+                    "--answer",
+                    "--limit",
+                    "3",
+                    "--pretty",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(answer.returncode, 0, answer.stderr)
+            self.assertIn('"answer"', answer.stdout)
+
+    def test_legacy_rag_entrypoint_wrappers_return_status_codes(self) -> None:
+        from okf_mcp import cli
+
+        tmp, _root, env = self._bundle()
+        with tmp, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.rag_inspect_main(["--env", str(env), "--pretty"]), 0)
+            self.assertEqual(cli.rag_refresh_main(["--env", str(env), "--pretty"]), 0)
+            self.assertEqual(cli.rag_retrieve_main(["search", "--env", str(env), "--limit", "3", "--pretty"]), 0)
+            self.assertEqual(cli.seven_d_main(["--help"]), 0)
 
     def test_infrastructure_mode_requires_backend_settings(self) -> None:
         tmp, _root, env = self._bundle()

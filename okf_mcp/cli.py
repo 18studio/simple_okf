@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Annotated, Any, Callable, Sequence
+
+import typer
 from uuid import uuid4
 
 from .okf import OKFBundle, OKFError
@@ -322,115 +324,167 @@ def seven_d_status(concept_id: str, *, bundle_path: str = "okf", as_json: bool =
     return 0
 
 
-def _add_bundle_json(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--bundle", default="okf", help="Path to OKF bundle")
-    parser.add_argument("--json", action="store_true", help="Print JSON instead of Markdown")
+class Transport(str, Enum):
+    stdio = "stdio"
+    http = "http"
+    sse = "sse"
 
 
-def _add_seven_d_subcommands(parser: argparse.ArgumentParser) -> None:
-    seven_sub = parser.add_subparsers(dest="seven_d_command", required=True)
-
-    report = seven_sub.add_parser("report", help="Generate a report for every 7D stage")
-    _add_bundle_json(report)
-    report.add_argument("--stage", default=None, help="Optional 7D stage key or display name")
-    report.set_defaults(handler=lambda args: seven_d_report(bundle_path=args.bundle, stage=args.stage, as_json=args.json))
-
-    validate_7d = seven_sub.add_parser("validate", help="Validate 7D registry usage")
-    _add_bundle_json(validate_7d)
-    validate_7d.set_defaults(handler=lambda args: seven_d_validate(bundle_path=args.bundle, as_json=args.json))
-
-    registry = seven_sub.add_parser("registry", help="Print the 7D registry")
-    _add_bundle_json(registry)
-    registry.set_defaults(handler=lambda args: seven_d_registry(bundle_path=args.bundle, as_json=args.json))
-
-    dashboard = seven_sub.add_parser("dashboard", help="Write the interactive 7D Kanban dashboard HTML")
-    dashboard.add_argument("--bundle", default="okf", help="Path to OKF bundle")
-    dashboard.add_argument("--out", default="artifacts/7d-dashboard.html", help="Repository artifacts/ output HTML path")
-    dashboard.add_argument("--json", action="store_true", help="Print JSON instead of a short message")
-    dashboard.set_defaults(handler=lambda args: seven_d_dashboard(bundle_path=args.bundle, out=args.out, as_json=args.json))
-
-    for name in ("status", "feature-status"):
-        status = seven_sub.add_parser(name, help="Derive one concept's 7D feature status")
-        _add_bundle_json(status)
-        status.add_argument("concept_id", help="OKF concept ID")
-        status.set_defaults(handler=lambda args: seven_d_status(args.concept_id, bundle_path=args.bundle, as_json=args.json))
+class RagMode(str, Enum):
+    local = "local"
+    keyword = "keyword"
+    semantic = "semantic"
+    hybrid = "hybrid"
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Simple OKF multi-app CLI")
-    sub = parser.add_subparsers(dest="app", required=True)
+app = typer.Typer(help="Simple OKF multi-app CLI", rich_markup_mode="markdown")
+rag_app = typer.Typer(help="Inspect, refresh, and query the local OKF RAG index", rich_markup_mode="markdown")
+seven_d_app = typer.Typer(help="Work with the Simple OKF 7D registry", rich_markup_mode="markdown")
+app.add_typer(rag_app, name="rag")
+app.add_typer(seven_d_app, name="7d")
 
-    server = sub.add_parser("server", help="Run the OKF FastMCP server")
-    server.add_argument("--bundle", default=DEFAULT_BUNDLE, help="Path to the OKF bundle directory")
-    server.add_argument("--transport", default="stdio", choices=("stdio", "http", "sse"), help="MCP transport to use")
-    server.add_argument("--host", default="127.0.0.1", help="Host for HTTP/SSE transports")
-    server.add_argument("--port", type=int, default=8000, help="Port for HTTP/SSE transports")
-    server.set_defaults(handler=lambda args: _run_server(args))
 
-    validate = sub.add_parser("validate", help="Validate an OKF bundle")
-    validate.add_argument("bundle", nargs="?", default="okf")
-    validate.set_defaults(handler=lambda args: validate_bundle(Path(args.bundle)))
+BundleArg = Annotated[Path, typer.Argument(help="Path to OKF bundle")]
+BundleOption = Annotated[str, typer.Option("--bundle", help="Path to OKF bundle")]
+JsonOption = Annotated[bool, typer.Option("--json", help="Print JSON instead of Markdown")]
+PrettyOption = Annotated[bool, typer.Option("--pretty", help="Pretty-print JSON")]
+EnvOption = Annotated[str | None, typer.Option("--env", help="Path to okf_mcp/rag/.env file")]
+RagModeOption = Annotated[RagMode | None, typer.Option("--mode", help="RAG retrieval mode")]
 
-    indexes = sub.add_parser("indexes", help="Generate OKF index.md files")
-    indexes.add_argument("bundle", nargs="?", default="okf")
-    indexes.set_defaults(handler=lambda args: generate_indexes(Path(args.bundle)))
 
-    export = sub.add_parser("export", help="Export Markdown docs into OKF Source Document concepts")
-    export.add_argument("source", nargs="?", default="system", help="Canonical Markdown source directory")
-    export.add_argument("--source", dest="source_option", default=None, help="Canonical Markdown source directory")
-    export.add_argument("--out", default="okf", help="OKF bundle or documents output directory")
-    export.add_argument("--force", action="store_true", help="Overwrite existing generated concepts")
-    export.set_defaults(handler=lambda args: export_documents(Path(args.source_option or args.source), Path(args.out), force=args.force))
+def _exit(code: int) -> None:
+    raise typer.Exit(code=int(code or 0))
 
-    graph = sub.add_parser("graph", help="Generate OKF graph JSON/HTML from Markdown links")
-    graph.add_argument("bundle", nargs="?", default="okf")
-    graph.add_argument("--out", help="Output JSON artifact path under repository artifacts/. Defaults to stdout.")
-    graph.add_argument("--html-out", help="Output self-contained HTML report artifact path under artifacts/.")
-    graph.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
-    graph.set_defaults(handler=lambda args: generate_graph(Path(args.bundle), out=args.out, html_out=args.html_out, pretty=args.pretty))
 
-    rag = sub.add_parser("rag", help="Inspect, refresh, and query the local OKF RAG index")
-    rag_sub = rag.add_subparsers(dest="rag_command", required=True)
-    rag_inspect_parser = rag_sub.add_parser("inspect", help="Inspect OKF RAG corpus")
-    rag_inspect_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    rag_inspect_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    rag_inspect_parser.set_defaults(handler=lambda args: rag_inspect(env=args.env, pretty=args.pretty))
+def _mode_value(mode: RagMode | None) -> str | None:
+    return mode.value if mode else None
 
-    rag_refresh_parser = rag_sub.add_parser("refresh", help="Refresh local OKF RAG index")
-    rag_refresh_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    rag_refresh_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    rag_refresh_parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
-    rag_refresh_parser.set_defaults(handler=lambda args: rag_refresh(env=args.env, mode=args.mode, pretty=args.pretty))
 
-    rag_retrieve_parser = rag_sub.add_parser("retrieve", help="Retrieve OKF RAG chunks")
-    rag_retrieve_parser.add_argument("query")
-    rag_retrieve_parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    rag_retrieve_parser.add_argument("--limit", type=int, default=None)
-    rag_retrieve_parser.add_argument("--type-filter", default=None)
-    rag_retrieve_parser.add_argument("--tag", default=None)
-    rag_retrieve_parser.add_argument("--answer", action="store_true", help="Return extractive answer instead of raw hits")
-    rag_retrieve_parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
-    rag_retrieve_parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    rag_retrieve_parser.set_defaults(
-        handler=lambda args: rag_retrieve(
-            args.query,
-            env=args.env,
-            limit=args.limit,
-            type_filter=args.type_filter,
-            tag=args.tag,
-            answer=args.answer,
-            mode=args.mode,
-            pretty=args.pretty,
+@app.command("server", help="Run the OKF FastMCP server")
+def server_command(
+    bundle: Annotated[str, typer.Option("--bundle", help="Path to the OKF bundle directory")] = DEFAULT_BUNDLE,
+    transport: Annotated[Transport, typer.Option("--transport", help="MCP transport to use")] = Transport.stdio,
+    host: Annotated[str, typer.Option("--host", help="Host for HTTP/SSE transports")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Port for HTTP/SSE transports")] = 8000,
+) -> None:
+    _exit(_run_server(bundle=bundle, transport=transport.value, host=host, port=port))
+
+
+@app.command("validate", help="Validate an OKF bundle")
+def validate_command(bundle: BundleArg = Path("okf")) -> None:
+    _exit(validate_bundle(bundle))
+
+
+@app.command("indexes", help="Generate OKF index.md files")
+def indexes_command(bundle: BundleArg = Path("okf")) -> None:
+    _exit(generate_indexes(bundle))
+
+
+@app.command("export", help="Export Markdown docs into OKF Source Document concepts")
+def export_command(
+    source: Annotated[Path, typer.Argument(help="Canonical Markdown source directory")] = Path("system"),
+    source_option: Annotated[Path | None, typer.Option("--source", help="Canonical Markdown source directory")] = None,
+    out: Annotated[Path, typer.Option("--out", help="OKF bundle or documents output directory")] = Path("okf"),
+    force: Annotated[bool, typer.Option("--force", help="Overwrite existing generated concepts")] = False,
+) -> None:
+    _exit(export_documents(source_option or source, out, force=force))
+
+
+@app.command("graph", help="Generate OKF graph JSON/HTML from Markdown links")
+def graph_command(
+    bundle: BundleArg = Path("okf"),
+    out: Annotated[str | None, typer.Option("--out", help="Output JSON artifact path under repository artifacts/. Defaults to stdout.")] = None,
+    html_out: Annotated[str | None, typer.Option("--html-out", help="Output self-contained HTML report artifact path under artifacts/.")] = None,
+    pretty: Annotated[bool, typer.Option("--pretty", help="Pretty-print JSON output")] = False,
+) -> None:
+    _exit(generate_graph(bundle, out=out, html_out=html_out, pretty=pretty))
+
+
+@rag_app.command("inspect", help="Inspect OKF RAG corpus")
+def rag_inspect_command(env: EnvOption = None, pretty: PrettyOption = False) -> None:
+    _exit(rag_inspect(env=env, pretty=pretty))
+
+
+@rag_app.command("refresh", help="Refresh local OKF RAG index")
+def rag_refresh_command(
+    env: EnvOption = None,
+    pretty: PrettyOption = False,
+    mode: RagModeOption = None,
+) -> None:
+    _exit(rag_refresh(env=env, mode=_mode_value(mode), pretty=pretty))
+
+
+@rag_app.command("retrieve", help="Retrieve OKF RAG chunks")
+def rag_retrieve_command(
+    query: Annotated[str, typer.Argument(help="Search query")],
+    env: EnvOption = None,
+    limit: Annotated[int | None, typer.Option("--limit", help="Maximum result count")] = None,
+    type_filter: Annotated[str | None, typer.Option("--type-filter", help="Filter by OKF concept type")] = None,
+    tag: Annotated[str | None, typer.Option("--tag", help="Filter by tag")] = None,
+    answer: Annotated[bool, typer.Option("--answer", help="Return extractive answer instead of raw hits")] = False,
+    mode: RagModeOption = None,
+    pretty: PrettyOption = False,
+) -> None:
+    _exit(
+        rag_retrieve(
+            query,
+            env=env,
+            limit=limit,
+            type_filter=type_filter,
+            tag=tag,
+            answer=answer,
+            mode=_mode_value(mode),
+            pretty=pretty,
         )
     )
 
-    seven = sub.add_parser("7d", help="Work with the Simple OKF 7D registry")
-    _add_seven_d_subcommands(seven)
 
-    return parser
+@seven_d_app.command("report", help="Generate a report for every 7D stage")
+def seven_d_report_command(
+    bundle: BundleOption = "okf",
+    as_json: JsonOption = False,
+    stage: Annotated[str | None, typer.Option("--stage", help="Optional 7D stage key or display name")] = None,
+) -> None:
+    _exit(seven_d_report(bundle_path=bundle, stage=stage, as_json=as_json))
 
 
-def _run_server(args: argparse.Namespace) -> int:
+@seven_d_app.command("validate", help="Validate 7D registry usage")
+def seven_d_validate_command(bundle: BundleOption = "okf", as_json: JsonOption = False) -> None:
+    _exit(seven_d_validate(bundle_path=bundle, as_json=as_json))
+
+
+@seven_d_app.command("registry", help="Print the 7D registry")
+def seven_d_registry_command(bundle: BundleOption = "okf", as_json: JsonOption = False) -> None:
+    _exit(seven_d_registry(bundle_path=bundle, as_json=as_json))
+
+
+@seven_d_app.command("dashboard", help="Write the interactive 7D Kanban dashboard HTML")
+def seven_d_dashboard_command(
+    bundle: BundleOption = "okf",
+    out: Annotated[str, typer.Option("--out", help="Repository artifacts/ output HTML path")] = "artifacts/7d-dashboard.html",
+    as_json: JsonOption = False,
+) -> None:
+    _exit(seven_d_dashboard(bundle_path=bundle, out=out, as_json=as_json))
+
+
+def _seven_d_status_command(concept_id: Annotated[str, typer.Argument(help="OKF concept ID")], bundle: BundleOption = "okf", as_json: JsonOption = False) -> None:
+    _exit(seven_d_status(concept_id, bundle_path=bundle, as_json=as_json))
+
+
+seven_d_app.command("status", help="Derive one concept's 7D feature status")(_seven_d_status_command)
+seven_d_app.command("feature-status", help="Derive one concept's 7D feature status")(_seven_d_status_command)
+
+
+def _invoke_typer(typer_app: typer.Typer, argv: Sequence[str] | None = None, *, prog_name: str | None = None) -> int:
+    command = typer.main.get_command(typer_app)
+    try:
+        result = command.main(args=list(argv or []), prog_name=prog_name, standalone_mode=True)
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+    return int(result or 0)
+
+
+def _run_server(*, bundle: str = DEFAULT_BUNDLE, transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> int:
     try:
         settings = load_settings()
         readiness = check_rag_readiness(settings)
@@ -443,12 +497,30 @@ def _run_server(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     create_mcp = _load_create_mcp()
-    mcp = create_mcp(args.bundle)
-    if args.transport == "stdio":
+    mcp = create_mcp(bundle)
+    if transport == "stdio":
         mcp.run()
     else:
-        mcp.run(transport=args.transport, host=args.host, port=args.port)
+        mcp.run(transport=transport, host=host, port=port)
     return 0
+
+
+server_app = typer.Typer(help="Run an OKF FastMCP server", rich_markup_mode="markdown")
+server_app.command()(server_command)
+validate_app = typer.Typer(help="Validate an OKF bundle", rich_markup_mode="markdown")
+validate_app.command()(validate_command)
+indexes_app = typer.Typer(help="Generate OKF index.md files", rich_markup_mode="markdown")
+indexes_app.command()(indexes_command)
+export_app = typer.Typer(help="Export Markdown docs into OKF Source Document concepts", rich_markup_mode="markdown")
+export_app.command()(export_command)
+graph_app = typer.Typer(help="Generate OKF graph JSON/HTML from Markdown links", rich_markup_mode="markdown")
+graph_app.command()(graph_command)
+rag_inspect_app = typer.Typer(help="Inspect OKF RAG corpus", rich_markup_mode="markdown")
+rag_inspect_app.command()(rag_inspect_command)
+rag_refresh_app = typer.Typer(help="Refresh local OKF RAG index", rich_markup_mode="markdown")
+rag_refresh_app.command()(rag_refresh_command)
+rag_retrieve_app = typer.Typer(help="Retrieve OKF RAG chunks", rich_markup_mode="markdown")
+rag_retrieve_app.command()(rag_retrieve_command)
 
 
 def main(
@@ -461,99 +533,43 @@ def main(
     # Console `okf --help` opts into multi-app help.
     if not args_list or (args_list[0].startswith("-") and not (multi_app_help_for_options and args_list[0] in {"-h", "--help"})):
         return server_main(args_list)
-    parser = build_parser()
-    args = parser.parse_args(args_list)
-    return int(args.handler(args) or 0)
+    return _invoke_typer(app, args_list)
 
 
 def server_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run an OKF FastMCP server")
-    parser.add_argument("--bundle", default=DEFAULT_BUNDLE, help="Path to the OKF bundle directory")
-    parser.add_argument("--transport", default="stdio", choices=("stdio", "http", "sse"), help="MCP transport to use")
-    parser.add_argument("--host", default="127.0.0.1", help="Host for HTTP/SSE transports")
-    parser.add_argument("--port", type=int, default=8000, help="Port for HTTP/SSE transports")
-    return _run_server(parser.parse_args(argv))
+    return _invoke_typer(server_app, sys.argv[1:] if argv is None else argv, prog_name="okf-mcp")
 
 
 def validate_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate an OKF bundle")
-    parser.add_argument("bundle", nargs="?", default="okf")
-    args = parser.parse_args(argv)
-    return validate_bundle(Path(args.bundle))
+    return _invoke_typer(validate_app, sys.argv[1:] if argv is None else argv, prog_name="okf-validate")
 
 
 def indexes_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate OKF index.md files")
-    parser.add_argument("bundle", nargs="?", default="okf")
-    args = parser.parse_args(argv)
-    return generate_indexes(Path(args.bundle))
+    return _invoke_typer(indexes_app, sys.argv[1:] if argv is None else argv, prog_name="okf-generate-indexes")
 
 
 def export_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Export Markdown docs into OKF Source Document concepts")
-    parser.add_argument("source", nargs="?", default="system", help="Canonical Markdown source directory")
-    parser.add_argument("--source", dest="source_option", default=None, help="Canonical Markdown source directory")
-    parser.add_argument("--out", default="okf", help="OKF bundle or documents output directory")
-    parser.add_argument("--force", action="store_true", help="Overwrite existing generated concepts")
-    args = parser.parse_args(argv)
-    return export_documents(Path(args.source_option or args.source), Path(args.out), force=args.force)
+    return _invoke_typer(export_app, sys.argv[1:] if argv is None else argv, prog_name="okf-export")
 
 
 def graph_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate OKF graph JSON/HTML from Markdown links")
-    parser.add_argument("bundle", nargs="?", default="okf")
-    parser.add_argument("--out", help="Output JSON artifact path under repository artifacts/. Defaults to stdout.")
-    parser.add_argument("--html-out", help="Output self-contained HTML report artifact path under artifacts/.")
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
-    args = parser.parse_args(argv)
-    return generate_graph(Path(args.bundle), out=args.out, html_out=args.html_out, pretty=args.pretty)
+    return _invoke_typer(graph_app, sys.argv[1:] if argv is None else argv, prog_name="okf-generate-graph")
 
 
 def rag_inspect_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Inspect OKF RAG corpus")
-    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    args = parser.parse_args(argv)
-    return rag_inspect(env=args.env, pretty=args.pretty)
+    return _invoke_typer(rag_inspect_app, sys.argv[1:] if argv is None else argv, prog_name="okf-rag-inspect")
 
 
 def rag_refresh_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Refresh local OKF RAG index")
-    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
-    args = parser.parse_args(argv)
-    return rag_refresh(env=args.env, mode=args.mode, pretty=args.pretty)
+    return _invoke_typer(rag_refresh_app, sys.argv[1:] if argv is None else argv, prog_name="okf-rag-refresh")
 
 
 def rag_retrieve_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Retrieve OKF RAG chunks")
-    parser.add_argument("query")
-    parser.add_argument("--env", default=None, help="Path to okf_mcp/rag/.env file")
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--type-filter", default=None)
-    parser.add_argument("--tag", default=None)
-    parser.add_argument("--answer", action="store_true", help="Return extractive answer instead of raw hits")
-    parser.add_argument("--mode", choices=("local", "keyword", "semantic", "hybrid"), default=None)
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    args = parser.parse_args(argv)
-    return rag_retrieve(
-        args.query,
-        env=args.env,
-        limit=args.limit,
-        type_filter=args.type_filter,
-        tag=args.tag,
-        answer=args.answer,
-        mode=args.mode,
-        pretty=args.pretty,
-    )
+    return _invoke_typer(rag_retrieve_app, sys.argv[1:] if argv is None else argv, prog_name="okf-rag-retrieve")
 
 
 def seven_d_main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Work with the Simple OKF 7D registry")
-    _add_seven_d_subcommands(parser)
-    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
-    return int(args.handler(args) or 0)
+    return _invoke_typer(seven_d_app, sys.argv[1:] if argv is None else argv, prog_name="okf-7d")
 
 
 if __name__ == "__main__":
